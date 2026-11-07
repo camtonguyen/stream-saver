@@ -190,7 +190,7 @@ async function save(chunks, filename) {
   const types = { ts: 'video/mp2t', mp4: 'video/mp4', webm: 'video/webm', m4a: 'audio/mp4' };
   const blob = new Blob(chunks, { type: types[ext] || 'application/octet-stream' });
   const url = URL.createObjectURL(blob);
-  const id = await chrome.downloads.download({ url, filename, conflictAction: 'uniquify' });
+  const id = await chrome.downloads.download({ url, filename, conflictAction: 'uniquify', saveAs: false });
   // Chrome may have renamed it ("Title (1).mp4"); report the real name so the ffmpeg hints are right.
   const [it] = await chrome.downloads.search({ id });
   const name = (it && it.filename && it.filename.split(/[\\/]/).pop()) || filename;
