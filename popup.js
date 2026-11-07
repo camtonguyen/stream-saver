@@ -11,6 +11,7 @@ const host = (u) => {
   try { return new URL(u).hostname; } catch { return ''; }
 };
 
+const MIME_EXT = { 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/x-m4a': 'm4a', 'audio/aac': 'aac', 'audio/ogg': 'ogg', 'audio/opus': 'opus', 'audio/flac': 'flac', 'audio/wav': 'wav', 'audio/x-wav': 'wav', 'video/quicktime': 'mov', 'video/x-matroska': 'mkv' };
 let tab;
 
 async function copy(text, btn, done = 'Copied') {
@@ -49,9 +50,12 @@ function openDownloader(it) {
 
 async function directDownload(it, btn) {
   const m = /\.([a-z0-9]{2,4})$/i.exec(new URL(it.url).pathname);
-  const ext = m ? m[1] : { mp4: 'mp4', webm: 'webm', audio: 'm4a' }[it.kind] || 'mp4';
+  // Extensionless URLs (Drive /videoplayback): trust the MIME type (response header, else ?mime=).
+  const mime = (it.ct || new URL(it.url).searchParams.get('mime') || '').split(';')[0].trim().toLowerCase();
+  const ext = m ? m[1] : MIME_EXT[mime] || { mp4: 'mp4', webm: 'webm', audio: 'm4a' }[it.kind] || 'mp4';
+  const title = safe((tab.title || '').replace(/ - Google Drive$/, ''));
   const r = await chrome.runtime.sendMessage({
-    type: MSG.DIRECT_DOWNLOAD, url: it.url, tabId: tab.id, filename: `${safe(tab.title)}.${ext}`,
+    type: MSG.DIRECT_DOWNLOAD, url: it.url, tabId: tab.id, filename: `${title}.${ext}`,
   });
   btn.textContent = r && r.error ? 'Failed' : 'Started';
   if (r && r.error) btn.title = r.error;
@@ -208,7 +212,7 @@ function render(d) {
 async function load() {
   [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   render(await readTab(tab.id));
-  if (/^https?:\/\/([^/]*\.)?(youtube\.com|youtu\.be|facebook\.com|fb\.watch|tiktok\.com|x\.com|twitter\.com|instagram\.com)\//.test(tab.url || '')) $('#site').hidden = false;
+  if (/^https?:\/\/([^/]*\.)?(youtube\.com|youtu\.be|facebook\.com|fb\.watch|tiktok\.com|x\.com|twitter\.com|instagram\.com|xiaohongshu\.com|xhslink\.com)\//.test(tab.url || '')) $('#site').hidden = false;
 }
 
 $('#sitebtn').onclick = async (e) => {
