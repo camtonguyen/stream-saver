@@ -16,9 +16,11 @@
     <p class="hint">Signed links (<code>?Expires=…&amp;Signature=…</code>) can expire within minutes, and yt-dlp can't renew them partway through a download. For long videos, use the <b>Open</b> button instead, which fetches fresh links automatically. Run it within a few minutes (signed links expire), on this same computer and network. The cookies file holds your login cookies, so keep it private and delete it afterwards. If you still get a 403, the site is probably checking the browser's network fingerprint. In that case, install <code>pip install "yt-dlp[default,curl-cffi]"</code> and add <code>--impersonate chrome</code>, or use the extension's <b>Open</b> or <b>Download</b> button instead.</p>
   </div>
   <div id="site" hidden>
-    <h2>This page <small>(YouTube, Facebook, TikTok, X, Instagram)</small></h2>
+    <h2>This page <small>(YouTube, TikTok, Instagram, Vimeo and more)</small></h2>
     <button id="sitebtn" class="primary">Copy yt-dlp command for this page</button>
-    <p class="hint">These sites use split or protected streams that the extension cannot save directly. Paste the command into a terminal. yt-dlp reads your Chrome login (for private or age-gated videos) and merges video and audio into one MP4. Needs <code>yt-dlp</code> and <code>ffmpeg</code> installed (<code>brew install yt-dlp ffmpeg</code>).</p>
+    <button id="audiobtn">Copy audio-only (MP3) command</button>
+    <button id="sharebtn" hidden>Download shared file directly</button>
+    <p class="hint">These sites use split or protected streams that the extension cannot save directly. Paste the command into a terminal. yt-dlp reads your Chrome login (for private or age-gated videos) and merges video and audio into one MP4. Needs <code>yt-dlp</code> and <code>ffmpeg</code> installed (<code>brew install yt-dlp ffmpeg</code>). The MP3 button extracts audio only. <b>Download shared file directly</b> (Dropbox / SharePoint file links) needs neither tool, and saves an HTML page if the link needs a sign-in.</p>
   </div>
   <h2>Streams &amp; files</h2>
   <div id="items"></div>

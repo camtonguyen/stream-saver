@@ -19,8 +19,21 @@ function ytdlpStreamCommand({ item, tabUrl, title, ua, cookiePath, win }) {
   return parts.join(' ');
 }
 
-// A page on YouTube / Facebook / TikTok / X / Instagram / Drive: let yt-dlp extract it.
-function ytdlpPageCommand({ url, win }) {
+// A page on a site yt-dlp supports (see SITES in popup.js); audio=true gives MP3 instead of MP4.
+function ytdlpPageCommand({ url, win, audio }) {
   const q = (s) => shellQuote(s, win);
-  return ['yt-dlp', '--cookies-from-browser', 'chrome', '-f', q('bv*+ba/b'), '--merge-output-format', 'mp4', '-o', q('%(title).150B.%(ext)s'), q(url)].join(' ');
+  const fmtArgs = audio ? ['-x', '--audio-format', 'mp3'] : ['-f', q('bv*+ba/b'), '--merge-output-format', 'mp4'];
+  return ['yt-dlp', '--cookies-from-browser', 'chrome', ...fmtArgs, '-o', q('%(title).150B.%(ext)s'), q(url)].join(' ');
+}
+
+// Dropbox / SharePoint file-share page -> direct-download URL (null for anything else, e.g. folders, home, http-less input).
+// ponytail: query flag only; consumer OneDrive and 1drv.ms links need a redirect, so they are left to yt-dlp / the browser.
+function shareDirectUrl(href) {
+  let u;
+  try { u = new URL(href); } catch { return null; }
+  if (u.protocol !== 'https:') return null;
+  if (/(^|\.)dropbox\.com$/.test(u.hostname) && /^\/(s|scl\/fi|sh)\//.test(u.pathname)) u.searchParams.set('dl', '1');
+  else if (/\.sharepoint\.com$/.test(u.hostname) && /^\/:\w:\//.test(u.pathname)) u.searchParams.set('download', '1');
+  else return null;
+  return u.href;
 }
