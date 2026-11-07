@@ -1,0 +1,80 @@
+// Run: node test.js   (no framework; loads the extension's classic scripts into one shared context)
+const assert = require('assert'), vm = require('vm'), fs = require('fs'), cp = require('child_process');
+const ctx = vm.createContext({ console, URL, TextDecoder });
+for (const f of ['common.js', 'captures.js', 'replay.js', 'fetcher.js', 'ytdlp.js']) vm.runInContext(fs.readFileSync(f, 'utf8'), ctx, { filename: f });
+const g = (n) => vm.runInContext(n, ctx);
+const tests = [];
+const test = (name, fn) => tests.push([name, fn]);
+
+// --- replay (A)
+test('replayHeaders derives Referer and Origin (browser downloads used to miss Origin)', () => {
+  const h = g('replayHeaders')({ page: 'https://site.dev/course', hdr: { cookie: 'a=1' } });
+  assert.equal(h.referer, 'https://site.dev/course/');
+  assert.equal(h.origin, 'https://site.dev');
+  assert.equal(h.cookie, 'a=1');
+});
+test('replayRules: cookie only to host; anyHost sends the rest everywhere', () => {
+  const r = g('replayRules')({ cookie: 'a=1', referer: 'https://x/' }, { tabId: 7, host: 'cdn.x', anyHost: true });
+  assert.equal(r.length, 2);
+  const general = r.find((x) => x.priority === 1), scoped = r.find((x) => x.priority === 2);
+  assert.deepEqual(general.condition, { tabIds: [7] });
+  assert.deepEqual(scoped.condition, { tabIds: [7], requestDomains: ['cdn.x'] });
+  assert.equal(scoped.action.requestHeaders[0].header, 'cookie');
+  assert.equal(g('replayRules')({ referer: 'https://x/' }, { tabId: -1, host: 'cdn.x' })[0].condition.requestDomains[0], 'cdn.x');
+});
+
+// --- captures (C)
+test('captures: cleanUrl merges range requests; store is fakeable', async () => {
+  const cu = g('cleanUrl');
+  assert.equal(cu('https://d/videoplayback?id=1&range=0-99&rn=3#x'), 'https://d/videoplayback?id=1');
+  const mem = {}, store = { get: async (k) => ({ [k]: mem[k] }), set: async (o) => Object.assign(mem, o) };
+  const d = await g('readTab')(5, store);
+  d.items['https://d/videoplayback?id=1'] = { kind: 'mp4' };
+  await g('writeTab')(5, d, store);
+  const back = await g('readTab')(5, store);
+  assert.ok(g('itemFor')(back, 'https://d/videoplayback?id=1&range=0-9'));
+});
+
+// --- fetcher (B)
+const E = (status) => Object.assign(new Error('HTTP ' + status), { status });
+const ok = (s) => ({ data: new TextEncoder().encode(s), status: 200 });
+const mk = (ext, page) => g('createFetcher')({ ext, page, getMaster: () => 'https://h/m.m3u8?sig=1', log() {}, sleep: async () => {} });
+test('fetcher: 403 on direct switches to the video tab and stays there', async () => {
+  let ec = 0; const f = mk(async () => { ec++; throw E(403); }, async () => ok('hi'));
+  assert.equal(await f.get('https://h/a', { type: 'text' }), 'hi');
+  await f.get('https://h/b');
+  assert.equal(ec, 1); assert.equal(f.mode, 'page');
+});
+test('fetcher: retries 5xx, gives up on 404', async () => {
+  let n = 0; const f = mk(async () => { if (++n < 3) throw E(503); return ok('x'); }, null);
+  await f.get('https://h/a'); assert.equal(n, 3);
+  await assert.rejects(mk(async () => { throw E(404); }, null).get('https://h/a'), { status: 404 });
+});
+test('fetcher: inherits the manifest query after a 403', async () => {
+  const seen = []; const f = mk(async (u) => { seen.push(u); if (!u.includes('sig=1')) throw E(403); return ok('s'); }, null);
+  await f.get('https://h/seg1.ts'); await f.get('https://h/seg2.ts');
+  assert.deepEqual(seen, ['https://h/seg1.ts', 'https://h/seg1.ts?sig=1', 'https://h/seg2.ts?sig=1']);
+});
+
+// --- yt-dlp (D)
+test('ytdlp: page URL can not inject shell code', () => {
+  const c = g('ytdlpPageCommand')({ url: "https://y.com/watch?v=$(touch pwn)`id`'", win: false });
+  assert.ok(c.includes("'https://y.com/watch?v=$(touch pwn)`id`'\\'''"), c);
+});
+test('ytdlp: stream command carries referer/origin/cookies', () => {
+  const c = g('ytdlpStreamCommand')({ item: { url: 'https://cdn/x.m3u8', page: 'https://s.dev/p', hdr: {} }, tabUrl: '', title: 'T/1', ua: 'UA', cookiePath: '/c.txt', win: false });
+  assert.ok(c.includes("--referer 'https://s.dev/p/'") && c.includes("'Origin:https://s.dev'") && c.includes("--cookies '/c.txt'") && c.includes("'T 1.%(ext)s'"), c);
+});
+
+// --- all files parse
+test('all scripts pass node --check', () => {
+  for (const f of fs.readdirSync('.').filter((x) => x.endsWith('.js') && x !== 'test.js')) cp.execFileSync('node', ['--check', f]);
+});
+
+(async () => {
+  let bad = 0;
+  for (const [n, fn] of tests) {
+    try { await fn(); console.log('ok  ', n); } catch (e) { bad++; console.log('FAIL', n, '\n    ', e.message); }
+  }
+  process.exit(bad ? 1 : 0);
+})();

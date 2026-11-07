@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "Stream Saver",
+  "version": "1.2.0",
+  "description": "Detect and save MP4/WebM files, HLS (incl. AES-128) and DASH streams, live HLS, and MSE/blob player buffers. Replays the page's headers and cookies to avoid 403 errors. Does not bypass DRM.",
+  "permissions": [
+    "webRequest",
+    "downloads",
+    "storage",
+    "tabs",
+    "cookies",
+    "declarativeNetRequestWithHostAccess"
+  ],
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_popup": "popup.html", "default_title": "Stream Saver" },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["inject.js"],
+      "run_at": "document_start",
+      "all_frames": true,
+      "match_about_blank": true,
+      "world": "MAIN"
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["common.js", "bridge.js"],
+      "run_at": "document_start",
+      "all_frames": true,
+      "match_about_blank": true
+    }
+  ]
+}
