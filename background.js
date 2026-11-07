@@ -109,7 +109,7 @@ async function directDownload({ url, filename, tabId }) {
   const rids = await installRules(replayRules(replayHeaders(it), { tabId: -1, host: new URL(url).hostname }));
   let id;
   try {
-    id = await chrome.downloads.download({ url, filename, conflictAction: 'uniquify' });
+    id = await chrome.downloads.download({ url, filename, conflictAction: 'uniquify', saveAs: false });
   } catch (e) {
     removeRules(rids);
     throw e;

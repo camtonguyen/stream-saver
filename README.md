@@ -15,7 +15,7 @@ Click the extension icon while the video plays. What you see depends on the site
 | **HLS / DASH** (`.m3u8`, `.mpd`) | Click **Open**, then **Start**. If there are several, pick the highest quality (e.g. `1080`). |
 | **MP4 / WebM / audio** | Click **Download**. |
 | **MSE / BLOB** (under *Captured from player*) | Last resort. Click **Turbo 16×** to buffer the video fast, then **Save**. Video and audio come as separate files. |
-| **This page** (YouTube, Facebook, TikTok, X, Instagram) | Click **Copy yt-dlp command** and paste it into a terminal. |
+| **This page** (YouTube, Facebook, TikTok, X, Instagram, Xiaohongshu/RedNote) | Click **Copy yt-dlp command** and paste it into a terminal. |
 
 Other buttons: **yt-dlp** copies a command with the page's headers and saves a `stream-saver-cookies.txt`. **Copy** copies the stream URL.
 
