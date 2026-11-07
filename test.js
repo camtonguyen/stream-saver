@@ -66,6 +66,11 @@ test('ytdlp: stream command carries referer/origin/cookies', () => {
   assert.ok(c.includes("--referer 'https://s.dev/p/'") && c.includes("'Origin:https://s.dev'") && c.includes("--cookies '/c.txt'") && c.includes("'T 1.%(ext)s'"), c);
 });
 
+test('ytdlp: % in the title is escaped for the -o template', () => {
+  const c = g('ytdlpStreamCommand')({ item: { url: 'https://c/x' }, tabUrl: '', title: '100% Real', ua: 'UA', win: false });
+  assert.ok(c.includes("'100%% Real.%(ext)s'"), c);
+});
+
 // --- all files parse
 test('all scripts pass node --check', () => {
   for (const f of fs.readdirSync('.').filter((x) => x.endsWith('.js') && x !== 'test.js')) cp.execFileSync('node', ['--check', f]);

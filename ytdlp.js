@@ -15,7 +15,7 @@ function ytdlpStreamCommand({ item, tabUrl, title, ua, cookiePath, win }) {
     if (!['referer', 'origin', 'user-agent', 'cookie'].includes(k)) parts.push('--add-header', q(`${k}:${v}`));
   }
   if (cookiePath) parts.push('--cookies', q(cookiePath));
-  parts.push('-N', '8', '-o', q(safe(title) + '.%(ext)s'), q(item.url));
+  parts.push('-N', '8', '-o', q(safe(title).replace(/%/g, '%%') + '.%(ext)s'), q(item.url));
   return parts.join(' ');
 }
 

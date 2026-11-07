@@ -9,8 +9,9 @@
   const origCreateURL = URL.createObjectURL;
 
   const post = () => {
-    clearTimeout(S.timer);
+    if (S.timer) return; // throttle: at most one update per 300ms, so constant appends can't starve it
     S.timer = setTimeout(() => {
+      S.timer = 0;
       window.postMessage(
         {
           __mdl: 'state',
@@ -54,7 +55,8 @@
     const origAppend = SourceBuffer.prototype.appendBuffer;
     SourceBuffer.prototype.appendBuffer = function (data) {
       const t = sbMap.get(this);
-      if (t && !S.eme && data) {
+      // ponytail: stop recording past ~1 GB per page so long videos/livestreams can't exhaust memory; raise if needed.
+      if (t && !S.eme && data && S.tracks.reduce((n, x) => n + x.bytes, 0) < 1e9) {
         try {
           const u8 = toU8(data);
           t.chunks.push(u8);

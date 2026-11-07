@@ -46,7 +46,8 @@ async function ensureFresh(u, label, force = false) {
   const exp = expiryOf(u);
   if (!force && (!exp || exp - Date.now() > 20000)) return u;
   if (exp) log(`The ${label} link ${exp < Date.now() ? 'expired' : 'expires'} at ${clock(exp)}. Looking for a newer signed link…`);
-  for (let i = 0; i < 180; i++) {
+  // ponytail: a link with no recognisable expiry gets 30s, not 3min (it is probably not a stale signature).
+  for (let i = 0; i < (exp ? 180 : 30); i++) {
     const n = await newestCapture(u);
     const ne = n && expiryOf(n);
     if (n && (!ne || ne > Date.now() + 20000)) {
@@ -189,9 +190,12 @@ async function save(chunks, filename) {
   const types = { ts: 'video/mp2t', mp4: 'video/mp4', webm: 'video/webm', m4a: 'audio/mp4' };
   const blob = new Blob(chunks, { type: types[ext] || 'application/octet-stream' });
   const url = URL.createObjectURL(blob);
-  await chrome.downloads.download({ url, filename, conflictAction: 'uniquify' });
-  log(`✔ Saved ${filename} — ${fmt(blob.size)}`, 'ok');
-  return filename;
+  const id = await chrome.downloads.download({ url, filename, conflictAction: 'uniquify' });
+  // Chrome may have renamed it ("Title (1).mp4"); report the real name so the ffmpeg hints are right.
+  const [it] = await chrome.downloads.search({ id });
+  const name = (it && it.filename && it.filename.split(/[\\/]/).pop()) || filename;
+  log(`✔ Saved ${name} — ${fmt(blob.size)}`, 'ok');
+  return name;
 }
 
 function addSelect(label, options, withNone) {
@@ -418,10 +422,12 @@ async function hlsTrack(t, suffix) {
   const refresh = () => {
     if (!refreshing) {
       refreshing = (async () => {
-        if (Date.now() - lastRefresh < 10000) return;
+        const wait = 10000 - (Date.now() - lastRefresh);
+        if (wait > 0) await sleep(wait); // links just reloaded and still failed: wait, then reload again
         lastRefresh = Date.now();
         log('Segment links seem to have expired. Reloading the playlist to get fresh links…');
         const np = await reloadPlaylist();
+        freshBySeq.clear(); // only the current window matters; keeps the map bounded
         for (const s of np.segments) freshBySeq.set(s.seq, s);
       })().finally(() => (refreshing = null));
     }
@@ -447,7 +453,7 @@ async function hlsTrack(t, suffix) {
       keys.set(uri, get(uri).then((b) => {
         if (b.byteLength !== 16) throw new Error(`AES key is ${b.byteLength} bytes, expected 16 (the key server probably returned an error page; play the video in its tab and try again)`);
         return crypto.subtle.importKey('raw', b, 'AES-CBC', false, ['decrypt']);
-      }));
+      }).catch((e) => { keys.delete(uri); throw e; })); // don't cache a failure
     }
     return keys.get(uri);
   };

@@ -22,7 +22,7 @@ function classify(url, ct = '') {
   if (/\.webm(\?|#|$)/.test(u) || ct.startsWith('video/webm')) return 'webm';
   if (/\.(mp4|m4v|mov)(\?|#|$)/.test(u) || ct.startsWith('video/mp4') || ct.startsWith('video/quicktime')) return 'mp4';
   if (/\.(m4a|mp3|ogg|opus|flac|wav)(\?|#|$)/.test(u) || ct.startsWith('audio/')) return 'audio';
-  if (ct.startsWith('video/')) return 'mp4'; // mkv, 3gp, ogv… and extensionless URLs (e.g. Google Drive videoplayback)
+  if (ct.startsWith('video/') && !/mp2t|iso\.segment/.test(ct)) return 'mp4'; // mkv, 3gp, ogv… and extensionless URLs (e.g. Google Drive videoplayback)
   return null;
 }
 
@@ -117,22 +117,33 @@ async function directDownload({ url, filename, tabId }) {
   await chrome.storage.session.set({
     ['dl_' + id]: { rids, url, tabId, frameId: it.frameId || 0, title: filename.replace(/\.[^.]+$/, ''), ext: (/\.([^.]+)$/.exec(filename) || [])[1] || 'mp4' },
   });
+  settle(id);
   return { id };
 }
 
-chrome.downloads.onChanged.addListener(async (c) => {
-  if (!c.state || c.state.current === 'in_progress') return;
-  const k = 'dl_' + c.id;
-  const info = (await chrome.storage.session.get(k))[k];
-  if (!info) return;
-  await chrome.storage.session.remove(k);
-  removeRules(info.rids);
-  if (c.state.current !== 'interrupted') return;
-  const [item] = await chrome.downloads.search({ id: c.id });
-  if (item && item.error === 'USER_CANCELED') return;
-  // Server refused the browser download (403 etc.): retry through the original tab.
-  const q = new URLSearchParams({ url: info.url, kind: 'file', tab: info.tabId, frame: info.frameId, title: info.title, ext: info.ext, why: (item && item.error) || '' });
-  chrome.tabs.create({ url: chrome.runtime.getURL('downloader.html?' + q) });
+// Runs when a download ends. Also called right after the record is saved, because a
+// download that fails instantly can finish before the record exists.
+const settling = new Set();
+async function settle(id) {
+  const k = 'dl_' + id;
+  if (settling.has(id)) return;
+  settling.add(id);
+  try {
+    const info = (await chrome.storage.session.get(k))[k];
+    const [item] = await chrome.downloads.search({ id });
+    if (!info || !item || item.state === 'in_progress') return;
+    await chrome.storage.session.remove(k);
+    removeRules(info.rids);
+    if (item.state !== 'interrupted' || item.error === 'USER_CANCELED') return;
+    // Server refused the browser download (403 etc.): retry through the original tab.
+    const q = new URLSearchParams({ url: info.url, kind: 'file', tab: info.tabId, frame: info.frameId, title: info.title, ext: info.ext, why: item.error || '' });
+    chrome.tabs.create({ url: chrome.runtime.getURL('downloader.html?' + q) });
+  } finally {
+    settling.delete(id);
+  }
+}
+chrome.downloads.onChanged.addListener((c) => {
+  if (c.state && c.state.current !== 'in_progress') settle(c.id);
 });
 
 /* -------------------------------- messages -------------------------------- */
@@ -146,7 +157,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === MSG.DOM_MEDIA && sender.tab) {
     const url = cleanUrl(msg.url);
     withTab(sender.tab.id, (d) => {
-      d.items[url] = d.items[url] || { url, kind: msg.tag === 'audio' ? 'audio' : 'mp4', size: 0, frameId: sender.frameId, page: sender.url, t: Date.now() };
+      d.items[url] = d.items[url] || { url, kind: msg.tag === 'audio' ? 'audio' : 'mp4', size: 0, frameId: sender.frameId, page: new URL(sender.url).origin, t: Date.now() };
     });
     return;
   }
