@@ -209,17 +209,27 @@ function render(d) {
   }
 }
 
+const SITES = /^https?:\/\/([^/]*\.)?(youtube\.com|youtu\.be|facebook\.com|fb\.watch|tiktok\.com|x\.com|twitter\.com|instagram\.com|xiaohongshu\.com|xhslink\.com|vimeo\.com|twitch\.tv|reddit\.com|bilibili\.com|dailymotion\.com|soundcloud\.com|pinterest\.com|drive\.google\.com)(\/|$)/;
+
 async function load() {
   [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   render(await readTab(tab.id));
-  if (/^https?:\/\/([^/]*\.)?(youtube\.com|youtu\.be|facebook\.com|fb\.watch|tiktok\.com|x\.com|twitter\.com|instagram\.com|xiaohongshu\.com|xhslink\.com)\//.test(tab.url || '')) $('#site').hidden = false;
+  const share = shareDirectUrl(tab.url || '');
+  $('#sharebtn').hidden = !share;
+  if (share || SITES.test(tab.url || '')) $('#site').hidden = false;
 }
 
-$('#sitebtn').onclick = async (e) => {
-  const c = ytdlpPageCommand({ url: tab.url, win: isWin() });
+const pageCmd = (audio) => async (e) => {
+  const c = ytdlpPageCommand({ url: tab.url, win: isWin(), audio });
   $('#cmd').value = c;
   $('#out').hidden = false;
   await copy(c, e.target);
+};
+$('#sitebtn').onclick = pageCmd(false);
+$('#audiobtn').onclick = pageCmd(true);
+$('#sharebtn').onclick = async (e) => {
+  try { await chrome.downloads.download({ url: shareDirectUrl(tab.url), saveAs: false }); e.target.textContent = 'Started ✓'; }
+  catch { e.target.textContent = 'Failed – open the link and download manually'; }
 };
 
 chrome.storage.session.onChanged.addListener((ch) => {

@@ -61,6 +61,18 @@ test('ytdlp: page URL can not inject shell code', () => {
   const c = g('ytdlpPageCommand')({ url: "https://y.com/watch?v=$(touch pwn)`id`'", win: false });
   assert.ok(c.includes("'https://y.com/watch?v=$(touch pwn)`id`'\\'''"), c);
 });
+test('ytdlp: audio flag and share links', () => {
+  assert.ok(g('ytdlpPageCommand')({ url: 'https://v.com/1', win: false, audio: true }).includes('-x --audio-format mp3'));
+  assert.equal(g('shareDirectUrl')('https://www.dropbox.com/s/a/f.mp4?dl=0'), 'https://www.dropbox.com/s/a/f.mp4?dl=1');
+  assert.ok(g('shareDirectUrl')('https://x.sharepoint.com/:v:/s/t/abc').endsWith('download=1'));
+  const s = g('shareDirectUrl');
+  assert.equal(s('https://youtube.com/watch'), null);
+  assert.equal(s('https://www.dropbox.com/home'), null);
+  assert.equal(s('https://x.sharepoint.com/sites/team'), null);
+  assert.equal(s('javascript:alert(1)'), null);
+  assert.equal(s('nope'), null);
+  assert.equal(s('https://www.dropbox.com/scl/fi/a/f.mp4?rlkey=k&dl=0#x'), 'https://www.dropbox.com/scl/fi/a/f.mp4?rlkey=k&dl=1#x');
+});
 test('ytdlp: stream command carries referer/origin/cookies', () => {
   const c = g('ytdlpStreamCommand')({ item: { url: 'https://cdn/x.m3u8', page: 'https://s.dev/p', hdr: {} }, tabUrl: '', title: 'T/1', ua: 'UA', cookiePath: '/c.txt', win: false });
   assert.ok(c.includes("--referer 'https://s.dev/p/'") && c.includes("'Origin:https://s.dev'") && c.includes("--cookies '/c.txt'") && c.includes("'T 1.%(ext)s'"), c);
