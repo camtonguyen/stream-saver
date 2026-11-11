@@ -23,7 +23,7 @@ function ytdlpStreamCommand({ item, tabUrl, title, ua, cookiePath, win }) {
 function ytdlpPageCommand({ url, win, audio }) {
   const q = (s) => shellQuote(s, win);
   const fmtArgs = audio ? ['-x', '--audio-format', 'mp3'] : ['-f', q('bv*+ba/b'), '--merge-output-format', 'mp4'];
-  return ['yt-dlp', '--cookies-from-browser', 'chrome', ...fmtArgs, '-o', q('%(title).150B.%(ext)s'), q(url)].join(' ');
+  return ['yt-dlp', '--no-playlist', '--cookies-from-browser', 'chrome', ...fmtArgs, '-o', q('%(title).150B.%(ext)s'), q(url)].join(' ');
 }
 
 // Dropbox / SharePoint file-share page -> direct-download URL (null for anything else, e.g. folders, home, http-less input).
@@ -37,3 +37,9 @@ function shareDirectUrl(href) {
   else return null;
   return u.href;
 }
+
+// Sites where the browser can't fetch the video itself. 'only' = never (YouTube serves SABR streams), 'fallback' = when no direct link was found.
+const YTDLP_SITES = /^https?:\/\/([^/]*\.)?(youtube\.com|youtu\.be|facebook\.com|fb\.watch|tiktok\.com|x\.com|twitter\.com|instagram\.com|xiaohongshu\.com|xhslink\.com|vimeo\.com|twitch\.tv|reddit\.com|bilibili\.com|dailymotion\.com|soundcloud\.com|pinterest\.com)(\/|$)/;
+const ytdlpRoute = (url) => (/^https?:\/\/([^/]*\.)?(youtube\.com|youtu\.be)(\/|$)/.test(url) ? 'only' : YTDLP_SITES.test(url) ? 'fallback' : null);
+const ytdlpInstallHint = (os) =>
+  os === 'mac' ? 'brew install yt-dlp ffmpeg' : os === 'win' ? 'winget install yt-dlp ffmpeg' : 'pip install -U yt-dlp   and install ffmpeg with your package manager (e.g. sudo apt install ffmpeg)';

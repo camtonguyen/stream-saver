@@ -113,6 +113,24 @@ test('pickSource: exact src match wins, else newest HLS/DASH, else MSE, DRM or n
   assert.equal(p({ items: { 'https://h/s.mp3': { kind: 'audio', t: 1 } }, mse: {} }, '').kind, 'none');
 });
 
+test('ytdlpRoute: YouTube always needs yt-dlp, other known sites only as a fallback, the rest never', () => {
+  const r = g('ytdlpRoute');
+  assert.equal(r('https://www.youtube.com/watch?v=1'), 'only');
+  assert.equal(r('https://youtu.be/abc'), 'only');
+  assert.equal(r('https://www.tiktok.com/@a/video/1'), 'fallback');
+  assert.equal(r('https://example.com/watch'), null);
+  assert.equal(r('https://notyoutube.com/x'), null);
+});
+test('ytdlpInstallHint gives the right install command per OS', () => {
+  const h = g('ytdlpInstallHint');
+  assert.equal(h('mac'), 'brew install yt-dlp ffmpeg');
+  assert.equal(h('win'), 'winget install yt-dlp ffmpeg');
+  assert.ok(h('linux').includes('yt-dlp') && h('linux').includes('ffmpeg'));
+});
+test('ytdlp page command downloads one video, not the playlist', () => {
+  assert.ok(g('ytdlpPageCommand')({ url: 'https://youtube.com/watch?v=1&list=PL', win: false }).includes('--no-playlist'));
+});
+
 // --- remux (E): ffmpeg makes the fixtures, ffprobe judges the output (independent of our code)
 const os = require('os'), path = require('path');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ss-'));
