@@ -146,6 +146,22 @@ chrome.downloads.onChanged.addListener((c) => {
   if (c.state && c.state.current !== 'in_progress') settle(c.id);
 });
 
+/* ------------------------- on-page button clicked ------------------------- */
+async function overlayDownload(tab, src) {
+  const pick = pickSource(await readTab(tab.id), src);
+  if (pick.kind !== 'item') return { mode: pick.kind }; // 'mse' | 'drm' | 'none': the page script handles these
+  const it = pick.item;
+  const { tpl } = await chrome.storage.sync.get({ tpl: '{title}' });
+  const title = fileNameFromTemplate(tpl, { title: (tab.title || '').replace(/ - Google Drive$/, ''), host: new URL(tab.url).hostname });
+  if (it.kind === 'hls' || it.kind === 'dash') {
+    const q = new URLSearchParams({ url: it.url, kind: it.kind, tab: tab.id, frame: it.frameId || 0, referer: (it.hdr && it.hdr.referer) || tab.url || '', title });
+    await chrome.tabs.create({ url: chrome.runtime.getURL('downloader.html?' + q) });
+    return { mode: 'tab' };
+  }
+  const r = await directDownload({ url: it.url, filename: `${title}.${extFor(it)}`, tabId: tab.id });
+  return r.error ? { error: r.error } : { mode: 'direct' };
+}
+
 /* -------------------------------- messages -------------------------------- */
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === MSG.MSE_STATE && sender.tab) {
@@ -160,6 +176,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       d.items[url] = d.items[url] || { url, kind: msg.tag === 'audio' ? 'audio' : 'mp4', size: 0, frameId: sender.frameId, page: new URL(sender.url).origin, t: Date.now() };
     });
     return;
+  }
+  if (msg.type === MSG.OVERLAY_DL && sender.tab) {
+    overlayDownload(sender.tab, msg.src).then(sendResponse, (e) => sendResponse({ error: e.message }));
+    return true;
   }
   if (msg.type === MSG.CLEAR && msg.tabId != null) {
     withTab(msg.tabId, (d) => {

@@ -83,6 +83,36 @@ test('ytdlp: % in the title is escaped for the -o template', () => {
   assert.ok(c.includes("'100%% Real.%(ext)s'"), c);
 });
 
+// --- overlay logic (F)
+test('fileNameFromTemplate fills {title} {site} {date}, strips unsafe chars, never empty', () => {
+  const f = g('fileNameFromTemplate');
+  assert.equal(f('{title} - {site}', { title: 'My: Clip', host: 'a.dev', date: '2026-01-02' }), 'My Clip - a.dev');
+  assert.equal(f('{date}_{title}', { title: 'x', host: '', date: '2026-01-02' }), '2026-01-02_x');
+  assert.equal(f('', { title: 'T' }), 'T');
+  assert.equal(f('{site}', { title: 'T', host: '' }), 'video');
+});
+test('siteOff matches the host and its subdomains only', () => {
+  const s = g('siteOff');
+  assert.ok(s(['youtube.com'], 'www.youtube.com') && s(['youtube.com'], 'youtube.com'));
+  assert.ok(!s(['youtube.com'], 'notyoutube.com') && !s([], 'a.dev') && !s(undefined, 'a.dev'));
+});
+test('extFor trusts the path extension, then the MIME type (Drive videoplayback), then the kind', () => {
+  const e = g('extFor');
+  assert.equal(e({ url: 'https://h/a/b.webm', kind: 'webm' }), 'webm');
+  assert.equal(e({ url: 'https://d/videoplayback?id=1', kind: 'mp4', ct: 'video/x-matroska' }), 'mkv');
+  assert.equal(e({ url: 'https://d/videoplayback?mime=audio%2Fmp4', kind: 'audio' }), 'm4a');
+  assert.equal(e({ url: 'https://d/x', kind: 'mp4' }), 'mp4');
+});
+test('pickSource: exact src match wins, else newest HLS/DASH, else MSE, DRM or none', () => {
+  const p = g('pickSource');
+  const d = { items: { 'https://h/a.mp4': { url: 'https://h/a.mp4', kind: 'mp4', t: 1 }, 'https://h/m.m3u8': { url: 'https://h/m.m3u8', kind: 'hls', t: 2 }, 'https://h/old.m3u8': { url: 'https://h/old.m3u8', kind: 'hls', t: 1 }, 'https://h/s.mp3': { url: 'https://h/s.mp3', kind: 'audio', t: 9 } }, mse: {} };
+  assert.equal(p(d, 'https://h/a.mp4').item.url, 'https://h/a.mp4');
+  assert.equal(p(d, 'blob:https://h/xyz').item.url, 'https://h/m.m3u8');
+  assert.equal(p({ items: {}, mse: { 0: { tracks: [{ bytes: 5 }] } } }, 'blob:x').kind, 'mse');
+  assert.equal(p({ items: {}, mse: { 0: { eme: true, tracks: [] } } }, '').kind, 'drm');
+  assert.equal(p({ items: { 'https://h/s.mp3': { kind: 'audio', t: 1 } }, mse: {} }, '').kind, 'none');
+});
+
 // --- remux (E): ffmpeg makes the fixtures, ffprobe judges the output (independent of our code)
 const os = require('os'), path = require('path');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ss-'));

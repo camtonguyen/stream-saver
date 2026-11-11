@@ -198,6 +198,37 @@ async function save(chunks, filename) {
   return name;
 }
 
+/* ------------------------- one MP4 (remux, no re-encode) ------------------------- */
+// ponytail: segments stay in memory until the merge; the output streams to disk. Stream segments to OPFS if RAM becomes the limit.
+let pickedHandle = null; // chosen in the Save dialog at the Start click (needs a user gesture)
+const AUDIO_ONLY = /^(aac|mp3|m4a|ogg)$/;
+async function pickFile() {
+  if (KIND === 'file' || !window.showSaveFilePicker) return true;
+  try {
+    pickedHandle = await showSaveFilePicker({ suggestedName: TITLE + '.mp4', types: [{ description: 'MP4 video', accept: { 'video/mp4': ['.mp4'] } }] });
+  } catch (e) {
+    if (e.name === 'AbortError') return false; // user cancelled the dialog
+    log('Save dialog unavailable (' + e.message + '); the file will go to your Downloads folder.');
+  }
+  return true;
+}
+// tracks: [{ chunks, ext, suffix, audio }]. Merges video (+ audio) into one MP4; any failure falls back to the raw files.
+async function finish(tracks) {
+  tracks = tracks.filter(Boolean);
+  const v = tracks.find((t) => !t.audio), a = tracks.find((t) => t.audio);
+  if (v && !AUDIO_ONLY.test(v.ext) && pickedHandle) {
+    try {
+      log('Merging into one MP4 (no re-encoding)…');
+      const { remuxToMp4 } = await import('./remux.mjs');
+      const r = await remuxToMp4({ video: v.chunks, audio: a && a.chunks, writable: await pickedHandle.createWritable() });
+      return log(`✔ Saved ${pickedHandle.name} — ${fmt(r.bytes)}`, 'ok');
+    } catch (e) {
+      log('Could not make an MP4 (' + e.message + '). Saving the raw files instead.', 'err');
+    }
+  }
+  for (const t of tracks) await save(t.chunks, `${TITLE}${t.suffix}.${t.ext}`);
+}
+
 function addSelect(label, options, withNone) {
   const wrap = document.createElement('label');
   wrap.append(label);
@@ -208,12 +239,6 @@ function addSelect(label, options, withNone) {
   wrap.append(sel);
   $('#controls').append(wrap);
   return sel;
-}
-
-function mergeHint(files) {
-  const [v, a] = files;
-  log('To merge video + audio into one file:');
-  log(`ffmpeg -i "${v}" -i "${a}" -c copy "${TITLE}.merged.mp4"`, 'cmd');
 }
 
 /* ------------------------------ direct file ------------------------------ */
@@ -340,8 +365,7 @@ async function hlsPrepare() {
   if (!pl.variants.length) {
     log(`Media playlist · ${pl.segments.length} segments${pl.end || pl.vod ? '' : ' · LIVE'}`);
     return async () => {
-      const f = await hlsTrack({ uri: MASTER, parsed: pl }, '');
-      if (f && f.endsWith('.ts')) tsHint(f);
+      await finish([await hlsTrack({ uri: MASTER, parsed: pl }, '')]);
     };
   }
 
@@ -364,18 +388,11 @@ async function hlsPrepare() {
     const group = audios.filter((a) => a['GROUP-ID'] === v.AUDIO);
     const a = group.find((x) => x.DEFAULT === 'YES') || group[0];
     if (a) log(`Audio rendition: ${a.NAME || a.LANGUAGE || a['GROUP-ID']}`);
-    const files = await Promise.all([
+    await finish(await Promise.all([
       hlsTrack({ uri: v.uri, variantPath: pathKey(v.uri) }, ''),
       a ? hlsTrack({ uri: a.URI, variantPath: pathKey(a.URI) }, '.audio') : null,
-    ]);
-    if (files[0] && files[1]) mergeHint(files);
-    else if (files[0] && files[0].endsWith('.ts')) tsHint(files[0]);
+    ]));
   };
-}
-
-function tsHint(f) {
-  log('Optional: remux the .ts into .mp4 without re-encoding:');
-  log(`ffmpeg -i "${f}" -c copy "${f.replace(/\.ts$/, '.mp4')}"`, 'cmd');
 }
 
 async function hlsTrack(t, suffix) {
@@ -515,7 +532,7 @@ async function hlsTrack(t, suffix) {
   const ext = fmp4 || /\.(m4s|mp4|m4a|m4v|cmf[va])$/.test(u)
     ? (suffix ? 'm4a' : 'mp4')
     : /\.aac$/.test(u) ? 'aac' : /\.mp3$/.test(u) ? 'mp3' : 'ts';
-  return save(chunks, `${TITLE}${suffix}.${ext}`);
+  return { chunks, ext, suffix, audio: !!suffix };
 }
 
 /* ---------------------------------- DASH ---------------------------------- */
@@ -638,8 +655,7 @@ async function dashPrepare() {
     if (vs && vs.value !== '-1') picks.push([V[+vs.value], '']);
     if (as && as.value !== '-1') picks.push([A[+as.value], picks.length ? '.audio' : '']);
     if (!picks.length) throw new Error('Pick at least one track');
-    const files = (await Promise.all(picks.map(([r, sfx]) => dashTrack(r, sfx)))).filter(Boolean);
-    if (files.length === 2) mergeHint(files);
+    await finish(await Promise.all(picks.map(([r, sfx]) => dashTrack(r, sfx))));
   };
 }
 
@@ -671,7 +687,7 @@ async function dashTrack(r, sfx) {
     return null;
   }
   const ext = /webm/.test(r.mime) ? 'webm' : r.type === 'audio' ? 'm4a' : 'mp4';
-  return save(chunks, `${TITLE}${sfx}.${ext}`);
+  return { chunks, ext, suffix: sfx, audio: r.type === 'audio' };
 }
 
 /* ---------------------------------- main ---------------------------------- */
@@ -684,6 +700,7 @@ async function dashTrack(r, sfx) {
     MASTER = await ensureFresh(SRC, 'stream');
     const job = KIND === 'dash' ? await dashPrepare() : KIND === 'file' ? await filePrepare() : await hlsPrepare();
     const start = async () => {
+      if (!(await pickFile())) return;
       $('#start').disabled = true;
       $('#stop').disabled = false;
       for (const s of document.querySelectorAll('#controls select')) s.disabled = true;
@@ -699,6 +716,7 @@ async function dashTrack(r, sfx) {
       }
     };
     $('#start').disabled = false;
+    if (KIND !== 'file') $('#start').textContent = 'Choose location & download MP4';
     $('#start').onclick = start;
     $('#stop').onclick = () => {
       stopFlag = true;

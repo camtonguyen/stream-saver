@@ -8,24 +8,21 @@ A local Chrome / Edge extension (Manifest V3) that finds video on the page you'r
 3. **Reload the video tab**, then press play. The extension only sees requests made after it loads.
 
 ## How to save a video
-Click the extension icon while the video plays. What you see depends on the site:
+Play the video, then click the **⬇ MP4** button that appears on it (top-left of the video, or just below it when the video touches the top of the window).
 
-| Row in the popup | What to do |
+| Video type | What happens |
 |---|---|
-| **HLS / DASH** (`.m3u8`, `.mpd`) | Click **Open**, then **Start**. If there are several, pick the highest quality (e.g. `1080`). |
-| **MP4 / WebM / audio** | Click **Download**. |
-| **MSE / BLOB** (under *Captured from player*) | Last resort. Click **Turbo 16×** to buffer the video fast, then **Save**. Video and audio come as separate files. |
-| **This page** (YouTube, Facebook, TikTok, X, Instagram, Xiaohongshu/RedNote) | Click **Copy yt-dlp command** and paste it into a terminal. |
+| **HLS / DASH** | A downloader tab opens at the highest quality. Click **Choose location & download MP4**, pick where to save, and keep the tab open. Video and audio are merged into one MP4, without re-encoding. |
+| **MP4 / WebM / audio files** | Downloads straight away. |
+| **MSE / blob players** (no URL to fetch) | The button switches to *Capturing…* and plays the video at 16× muted. Click it again (or let the video end) to save. Video and audio come as separate files. |
+| **DRM-protected** | The button is disabled (🔒). |
 
-Other buttons: **yt-dlp** copies a command with the page's headers and saves a `stream-saver-cookies.txt`. **Copy** copies the stream URL.
+Click the extension icon for settings: the **file name template** (`{title}`, `{site}`, `{date}`) and a **per-site switch** that hides the button on the current site.
 
 ## Good to know
-- HLS downloads are saved as `.ts`. Convert to MP4 without re-encoding:
-  `ffmpeg -i in.ts -c copy out.mp4`
-- Separate video and audio files (from MSE or DASH) merge the same way:
-  `ffmpeg -i video.mp4 -i audio.m4a -c copy out.mp4`
-- For YouTube and similar sites, install the tools first: `brew install yt-dlp ffmpeg`.
-- The cookies file holds your login. Keep it private and delete it afterwards.
+- If the MP4 merge fails, the raw `.ts` / `.mp4` / `.m4a` files are saved instead. Merge them with `ffmpeg -i video.mp4 -i audio.m4a -c copy out.mp4`.
+- Downloaded segments are held in memory until the merge, so very long videos need free RAM; the MP4 itself is streamed to disk.
+- YouTube and similar sites that serve only MSE can't be fetched by URL; they use the capture path above. The yt-dlp helpers (`ytdlp.js`) are not wired into the UI right now.
 
 ## Fixing 403 Forbidden
 The extension already replays the page's Referer, cookies and headers, refreshes expired signed links, and falls back to fetching through the video tab. So:
@@ -42,4 +39,4 @@ DRM (Widevine, PlayReady, FairPlay, SAMPLE-AES) is detected and refused. Geo-blo
 Only download content you have the right to save.
 
 ## Development
-`node test.js` runs the tests (no dependencies). Shared code: `common.js` (helpers, message tags), `captures.js` (per-tab record), `replay.js` (header replay), `fetcher.js` (403 fallback), `ytdlp.js` (command builder).
+`node test.js` runs the tests (no dependencies). Shared code: `common.js` (helpers, message tags), `captures.js` (per-tab record), `replay.js` (header replay), `fetcher.js` (403 fallback), `ytdlp.js` (command builder, currently unused by the UI), `remux.mjs` (merge into one MP4, uses vendored Mediabunny, MPL-2.0), `overlay.js` (the on-page button).
