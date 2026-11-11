@@ -8,24 +8,23 @@ A local Chrome / Edge extension (Manifest V3) that finds video on the page you'r
 3. **Reload the video tab**, then press play. The extension only sees requests made after it loads.
 
 ## How to save a video
-Click the extension icon while the video plays. What you see depends on the site:
+Play the video, then click the **⬇ MP4** button that appears on it (top-left of the video, or just below it when the video touches the top of the window).
 
-| Row in the popup | What to do |
+| Video type | What happens |
 |---|---|
-| **HLS / DASH** (`.m3u8`, `.mpd`) | Click **Open**, then **Start**. If there are several, pick the highest quality (e.g. `1080`). |
-| **MP4 / WebM / audio** | Click **Download**. |
-| **MSE / BLOB** (under *Captured from player*) | Last resort. Click **Turbo 16×** to buffer the video fast, then **Save**. Video and audio come as separate files. |
-| **This page** (YouTube, Facebook, TikTok, X, Instagram, Xiaohongshu/RedNote) | Click **Copy yt-dlp command** and paste it into a terminal. |
+| **HLS / DASH** | One click. A downloader tab opens at the highest quality, starts by itself, shows progress, merges video and audio into one MP4 (no re-encoding) and saves it to Downloads. Keep the tab open. |
+| **Live HLS** | Not auto-started: the downloader tab waits for you to press **Start**, then **Stop & save** (it also stops at ~1 GB). |
+| **MP4 / WebM / audio files** | Downloads straight away. |
+| **YouTube**, and other known sites with no fetchable URL (TikTok, Instagram, Facebook, X, Vimeo…) | The button opens a dialog with a yt-dlp command (copied for you) that produces one MP4. **Install the tools first** (the dialog lists steps for macOS, Windows and Linux): macOS `brew install yt-dlp ffmpeg`; Windows `winget install yt-dlp.yt-dlp` and `winget install Gyan.FFmpeg`; Linux `sudo apt install ffmpeg pipx && pipx install yt-dlp` (Debian/Ubuntu) or `sudo pacman -S yt-dlp ffmpeg` (Arch). Without them the command fails. |
+| **Other players with no fetchable URL** | The button says no direct link was found. Nothing is played back or recorded. |
+| **DRM-protected** | The button is disabled (🔒). |
 
-Other buttons: **yt-dlp** copies a command with the page's headers and saves a `stream-saver-cookies.txt`. **Copy** copies the stream URL.
+Click the extension icon for settings: the **file name template** (`{title}`, `{site}`, `{date}`) and a **per-site switch** that hides the button on the current site.
 
 ## Good to know
-- HLS downloads are saved as `.ts`. Convert to MP4 without re-encoding:
-  `ffmpeg -i in.ts -c copy out.mp4`
-- Separate video and audio files (from MSE or DASH) merge the same way:
-  `ffmpeg -i video.mp4 -i audio.m4a -c copy out.mp4`
-- For YouTube and similar sites, install the tools first: `brew install yt-dlp ffmpeg`.
-- The cookies file holds your login. Keep it private and delete it afterwards.
+- If the MP4 merge fails, the raw `.ts` / `.mp4` / `.m4a` files are saved instead. Merge them with `ffmpeg -i video.mp4 -i audio.m4a -c copy out.mp4`.
+- Segments and the finished MP4 are held in memory before saving, so very long videos (multi-GB) need free RAM.
+- YouTube serves only SABR streams, so a browser extension can't fetch it; that is why it uses yt-dlp. 
 
 ## Fixing 403 Forbidden
 The extension already replays the page's Referer, cookies and headers, refreshes expired signed links, and falls back to fetching through the video tab. So:
@@ -42,4 +41,4 @@ DRM (Widevine, PlayReady, FairPlay, SAMPLE-AES) is detected and refused. Geo-blo
 Only download content you have the right to save.
 
 ## Development
-`node test.js` runs the tests (no dependencies). Shared code: `common.js` (helpers, message tags), `captures.js` (per-tab record), `replay.js` (header replay), `fetcher.js` (403 fallback), `ytdlp.js` (command builder).
+`node test.js` runs the tests (no dependencies). Shared code: `common.js` (helpers, message tags), `captures.js` (per-tab record), `replay.js` (header replay), `fetcher.js` (403 fallback), `ytdlp.js` (yt-dlp command builder and site routing), `remux.mjs` (merge into one MP4, uses vendored Mediabunny, MPL-2.0), `overlay.js` (the on-page button).

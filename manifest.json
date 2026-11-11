@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Stream Saver",
-  "version": "1.2.0",
-  "description": "Detect and save MP4/WebM files, HLS (incl. AES-128) and DASH streams, live HLS, and MSE/blob player buffers. Replays the page's headers and cookies to avoid 403 errors. Does not bypass DRM.",
+  "version": "1.3.0",
+  "description": "One-click \"Download MP4\" button on every video: MP4/WebM files, HLS (incl. AES-128) and DASH streams merged into one MP4, live HLS, and MSE/blob player buffers. Replays the page's headers and cookies to avoid 403 errors. Does not bypass DRM.",
   "permissions": [
     "webRequest",
     "downloads",
@@ -25,7 +25,7 @@
     },
     {
       "matches": ["<all_urls>"],
-      "js": ["common.js", "bridge.js"],
+      "js": ["common.js", "ytdlp.js", "bridge.js", "overlay.js"],
       "run_at": "document_start",
       "all_frames": true,
       "match_about_blank": true

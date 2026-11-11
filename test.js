@@ -83,6 +83,130 @@ test('ytdlp: % in the title is escaped for the -o template', () => {
   assert.ok(c.includes("'100%% Real.%(ext)s'"), c);
 });
 
+// --- overlay logic (F)
+test('fileNameFromTemplate fills {title} {site} {date}, strips unsafe chars, never empty', () => {
+  const f = g('fileNameFromTemplate');
+  assert.equal(f('{title} - {site}', { title: 'My: Clip', host: 'a.dev', date: '2026-01-02' }), 'My Clip - a.dev');
+  assert.equal(f('{date}_{title}', { title: 'x', host: '', date: '2026-01-02' }), '2026-01-02_x');
+  assert.equal(f('', { title: 'T' }), 'T');
+  assert.equal(f('{site}', { title: 'T', host: '' }), 'T'); // template gave nothing: use the title, not 'video' for every file
+  assert.equal(f('{site}', { title: '', host: '' }), 'video');
+});
+test('siteOff matches the host and its subdomains only', () => {
+  const s = g('siteOff');
+  assert.ok(s(['youtube.com'], 'www.youtube.com') && s(['youtube.com'], 'youtube.com'));
+  assert.ok(!s(['youtube.com'], 'notyoutube.com') && !s([], 'a.dev') && !s(undefined, 'a.dev'));
+});
+test('extFor trusts the path extension, then the MIME type (Drive videoplayback), then the kind', () => {
+  const e = g('extFor');
+  assert.equal(e({ url: 'https://h/a/b.webm', kind: 'webm' }), 'webm');
+  assert.equal(e({ url: 'https://d/videoplayback?id=1', kind: 'mp4', ct: 'video/x-matroska' }), 'mkv');
+  assert.equal(e({ url: 'https://d/videoplayback?mime=audio%2Fmp4', kind: 'audio' }), 'm4a');
+  assert.equal(e({ url: 'https://d/x', kind: 'mp4' }), 'mp4');
+});
+test('pickSource: exact src match wins, else newest HLS/DASH, else MSE, DRM or none', () => {
+  const p = g('pickSource');
+  const d = { items: { 'https://h/a.mp4': { url: 'https://h/a.mp4', kind: 'mp4', t: 1 }, 'https://h/m.m3u8': { url: 'https://h/m.m3u8', kind: 'hls', t: 2 }, 'https://h/old.m3u8': { url: 'https://h/old.m3u8', kind: 'hls', t: 1 }, 'https://h/s.mp3': { url: 'https://h/s.mp3', kind: 'audio', t: 9 } }, mse: {} };
+  assert.equal(p(d, 'https://h/a.mp4').item.url, 'https://h/a.mp4');
+  assert.equal(p(d, 'blob:https://h/xyz').item.url, 'https://h/m.m3u8');
+  assert.equal(p(d, 'blob:https://h/xyz', false).kind, 'none'); // several videos / yt-dlp sites: never guess
+  assert.equal(p(d, 'https://h/a.mp4', false).item.url, 'https://h/a.mp4'); // exact match is always fine
+  assert.equal(p({ items: {}, mse: { 0: { tracks: [{ bytes: 5 }] } } }, 'blob:x').kind, 'mse');
+  assert.equal(p({ items: {}, mse: { 0: { eme: true, tracks: [] } } }, '').kind, 'drm');
+  assert.equal(p({ items: { 'https://h/s.mp3': { kind: 'audio', t: 1 } }, mse: {} }, '').kind, 'none');
+});
+
+test('ytdlpRoute: YouTube always needs yt-dlp, other known sites only as a fallback, the rest never', () => {
+  const r = g('ytdlpRoute');
+  assert.equal(r('https://www.youtube.com/watch?v=1'), 'only');
+  assert.equal(r('https://youtu.be/abc'), 'only');
+  assert.equal(r('https://www.tiktok.com/@a/video/1'), 'fallback');
+  assert.equal(r('https://example.com/watch'), null);
+  assert.equal(r('https://notyoutube.com/x'), null);
+});
+test('ytdlpInstall lists macOS, Windows and Linux steps, the current OS first', () => {
+  const h = g('ytdlpInstall');
+  assert.deepEqual(h('win').map((x) => x.os), ['win', 'mac', 'linux']);
+  assert.deepEqual(h('linux').map((x) => x.os), ['linux', 'mac', 'win']);
+  assert.ok(h('win')[0].mine && !h('win')[1].mine);
+  const all = h('mac'); const cmd = (os) => all.find((x) => x.os === os).cmd;
+  assert.ok(cmd('mac').includes('brew install yt-dlp ffmpeg'));
+  assert.ok(cmd('win').includes('winget install yt-dlp.yt-dlp') && cmd('win').includes('Gyan.FFmpeg'));
+  assert.ok(cmd('linux').includes('apt') && cmd('linux').includes('pacman') && cmd('linux').includes('yt-dlp'));
+});
+test('detectOs: mac/win/linux, and "other" for ChromeOS, Android, iOS or unknown', () => {
+  const d = g('detectOs');
+  assert.equal(d({ uaPlatform: 'macOS' }), 'mac');
+  assert.equal(d({ uaPlatform: 'Windows' }), 'win');
+  assert.equal(d({ uaPlatform: 'Linux' }), 'linux');
+  assert.equal(d({ platform: 'MacIntel' }), 'mac');
+  assert.equal(d({ platform: 'Win32' }), 'win');
+  assert.equal(d({ platform: 'Linux x86_64' }), 'linux');
+  assert.equal(d({ ua: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' }), 'mac');
+  assert.equal(d({ uaPlatform: 'Chrome OS', platform: 'Linux x86_64', ua: 'Mozilla/5.0 (X11; CrOS x86_64)' }), 'other');
+  assert.equal(d({ platform: 'Linux armv8l', ua: 'Mozilla/5.0 (Linux; Android 14)' }), 'other');
+  assert.equal(d({ platform: 'iPad', ua: 'Mozilla/5.0 (iPad; CPU OS 17 like Mac OS X)' }), 'other');
+  assert.equal(d({}), 'other');
+});
+test('ytdlpInstall for an unknown system marks none as detected', () => {
+  const h = g('ytdlpInstall')('other');
+  assert.deepEqual(h.map((x) => x.os), ['mac', 'win', 'linux']);
+  assert.ok(h.every((x) => !x.mine));
+});
+test('ytdlpPageUrl turns a YouTube embed into the watch page', () => {
+  const u = g('ytdlpPageUrl');
+  assert.equal(u('https://www.youtube.com/embed/abc123?autoplay=1'), 'https://www.youtube.com/watch?v=abc123');
+  assert.equal(u('https://www.youtube.com/watch?v=1'), 'https://www.youtube.com/watch?v=1');
+  assert.equal(u('https://vimeo.com/1'), 'https://vimeo.com/1');
+});
+test('ytdlp page command downloads one video, not the playlist', () => {
+  assert.ok(g('ytdlpPageCommand')({ url: 'https://youtube.com/watch?v=1&list=PL', win: false }).includes('--no-playlist'));
+});
+
+// --- remux (E): ffmpeg makes the fixtures, ffprobe judges the output (independent of our code)
+const os = require('os'), path = require('path');
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ss-'));
+const ff = (...a) => cp.execFileSync('ffmpeg', ['-loglevel', 'error', '-y', ...a]);
+const probe = (f) => cp.execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=codec_name,codec_type,duration', '-of', 'json', f]).toString();
+const sink = (f) => { const fd = fs.openSync(f, 'w'); return new WritableStream({ write(c) { fs.writeSync(fd, c.data, 0, c.data.byteLength, c.position); }, close() { fs.closeSync(fd); } }); };
+const blob = (f) => new Blob([fs.readFileSync(f)]);
+test('remux: .ts video+audio becomes one MP4 with the same codecs, no re-encode', async () => {
+  const ts = path.join(tmp, 'in.ts'), out = path.join(tmp, 'out.mp4');
+  ff('-f', 'lavfi', '-i', 'testsrc=size=320x240:rate=30', '-f', 'lavfi', '-i', 'sine=frequency=440', '-t', '3', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-f', 'mpegts', ts);
+  const { remuxToMp4 } = await import('./remux.mjs');
+  const r = await remuxToMp4({ video: [blob(ts)], writable: sink(out) });
+  const s = JSON.parse(probe(out)).streams;
+  assert.deepEqual(s.map((x) => x.codec_name).sort(), ['aac', 'h264']);
+  assert.ok(Math.abs(+s.find((x) => x.codec_type === 'video').duration - 3) < 0.2);
+  assert.equal(r.bytes, fs.statSync(out).size);
+});
+
+test('remux: separate video and audio files merge into one MP4 with both tracks', async () => {
+  const v = path.join(tmp, 'v.mp4'), a = path.join(tmp, 'a.m4a'), out = path.join(tmp, 'merged.mp4');
+  ff('-f', 'lavfi', '-i', 'testsrc=size=320x240:rate=30', '-t', '3', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', v);
+  ff('-f', 'lavfi', '-i', 'sine=frequency=440', '-t', '3', '-c:a', 'aac', a);
+  const { remuxToMp4 } = await import('./remux.mjs');
+  await remuxToMp4({ video: blob(v), audio: blob(a), writable: sink(out) });
+  const s = JSON.parse(probe(out)).streams;
+  assert.deepEqual(s.map((x) => x.codec_type).sort(), ['audio', 'video']);
+  assert.deepEqual(s.map((x) => x.codec_name).sort(), ['aac', 'h264']);
+});
+test('remux: separate VP9 and Opus WebM tracks (MSE capture) become one MP4, returned as a blob when no writable is given', async () => {
+  const v = path.join(tmp, 'v.webm'), a = path.join(tmp, 'a.webm'), out = path.join(tmp, 'webm2mp4.mp4');
+  ff('-f', 'lavfi', '-i', 'testsrc=size=320x240:rate=30', '-t', '3', '-c:v', 'libvpx-vp9', '-an', v);
+  ff('-f', 'lavfi', '-i', 'sine=frequency=440', '-t', '3', '-c:a', 'libopus', a);
+  const { remuxToMp4 } = await import('./remux.mjs');
+  const r = await remuxToMp4({ video: blob(v), audio: blob(a) });
+  assert.ok(r.blob.size > 0 && r.blob.size === r.bytes);
+  fs.writeFileSync(out, Buffer.from(await r.blob.arrayBuffer()));
+  const s = JSON.parse(probe(out)).streams;
+  assert.deepEqual(s.map((x) => x.codec_name).sort(), ['opus', 'vp9']);
+});
+test('remux: non-media input rejects instead of writing a broken file', async () => {
+  const { remuxToMp4 } = await import('./remux.mjs');
+  await assert.rejects(remuxToMp4({ video: [new Blob(['not a video'])], writable: sink(path.join(tmp, 'bad.mp4')) }));
+});
+
 // --- all files parse
 test('all scripts pass node --check', () => {
   for (const f of fs.readdirSync('.').filter((x) => x.endsWith('.js') && x !== 'test.js')) cp.execFileSync('node', ['--check', f]);
