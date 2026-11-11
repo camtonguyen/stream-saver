@@ -83,6 +83,39 @@ test('ytdlp: % in the title is escaped for the -o template', () => {
   assert.ok(c.includes("'100%% Real.%(ext)s'"), c);
 });
 
+// --- remux (E): ffmpeg makes the fixtures, ffprobe judges the output (independent of our code)
+const os = require('os'), path = require('path');
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ss-'));
+const ff = (...a) => cp.execFileSync('ffmpeg', ['-loglevel', 'error', '-y', ...a]);
+const probe = (f) => cp.execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=codec_name,codec_type,duration', '-of', 'json', f]).toString();
+const sink = (f) => { const fd = fs.openSync(f, 'w'); return new WritableStream({ write(c) { fs.writeSync(fd, c.data, 0, c.data.byteLength, c.position); }, close() { fs.closeSync(fd); } }); };
+const blob = (f) => new Blob([fs.readFileSync(f)]);
+test('remux: .ts video+audio becomes one MP4 with the same codecs, no re-encode', async () => {
+  const ts = path.join(tmp, 'in.ts'), out = path.join(tmp, 'out.mp4');
+  ff('-f', 'lavfi', '-i', 'testsrc=size=320x240:rate=30', '-f', 'lavfi', '-i', 'sine=frequency=440', '-t', '3', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-f', 'mpegts', ts);
+  const { remuxToMp4 } = await import('./remux.mjs');
+  const r = await remuxToMp4({ video: [blob(ts)], writable: sink(out) });
+  const s = JSON.parse(probe(out)).streams;
+  assert.deepEqual(s.map((x) => x.codec_name).sort(), ['aac', 'h264']);
+  assert.ok(Math.abs(+s.find((x) => x.codec_type === 'video').duration - 3) < 0.2);
+  assert.equal(r.bytes, fs.statSync(out).size);
+});
+
+test('remux: separate video and audio files merge into one MP4 with both tracks', async () => {
+  const v = path.join(tmp, 'v.mp4'), a = path.join(tmp, 'a.m4a'), out = path.join(tmp, 'merged.mp4');
+  ff('-f', 'lavfi', '-i', 'testsrc=size=320x240:rate=30', '-t', '3', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', v);
+  ff('-f', 'lavfi', '-i', 'sine=frequency=440', '-t', '3', '-c:a', 'aac', a);
+  const { remuxToMp4 } = await import('./remux.mjs');
+  await remuxToMp4({ video: blob(v), audio: blob(a), writable: sink(out) });
+  const s = JSON.parse(probe(out)).streams;
+  assert.deepEqual(s.map((x) => x.codec_type).sort(), ['audio', 'video']);
+  assert.deepEqual(s.map((x) => x.codec_name).sort(), ['aac', 'h264']);
+});
+test('remux: non-media input rejects instead of writing a broken file', async () => {
+  const { remuxToMp4 } = await import('./remux.mjs');
+  await assert.rejects(remuxToMp4({ video: [new Blob(['not a video'])], writable: sink(path.join(tmp, 'bad.mp4')) }));
+});
+
 // --- all files parse
 test('all scripts pass node --check', () => {
   for (const f of fs.readdirSync('.').filter((x) => x.endsWith('.js') && x !== 'test.js')) cp.execFileSync('node', ['--check', f]);
