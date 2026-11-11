@@ -50,3 +50,9 @@ function ytdlpInstall(os) {
   ].map((x) => ({ ...x, mine: x.os === os }));
   return [...all.filter((x) => x.mine), ...all.filter((x) => !x.mine)];
 }
+
+// 'mac' | 'win' | 'linux' from whatever the browser exposes (userAgentData.platform is the most reliable).
+function detectOs({ uaPlatform, platform, ua } = {}) {
+  const s = [uaPlatform, platform, ua].find(Boolean) || '';
+  return /^win/i.test(s) || /windows/i.test(s) ? 'win' : /mac/i.test(s) ? 'mac' : 'linux';
+}

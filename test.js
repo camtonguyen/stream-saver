@@ -131,6 +131,18 @@ test('ytdlpInstall lists macOS, Windows and Linux steps, the current OS first', 
   assert.ok(cmd('win').includes('winget install yt-dlp.yt-dlp') && cmd('win').includes('Gyan.FFmpeg'));
   assert.ok(cmd('linux').includes('apt') && cmd('linux').includes('pacman') && cmd('linux').includes('yt-dlp'));
 });
+test('detectOs reads userAgentData first, then platform, then the user agent', () => {
+  const d = g('detectOs');
+  assert.equal(d({ uaPlatform: 'macOS' }), 'mac');
+  assert.equal(d({ uaPlatform: 'Windows' }), 'win');
+  assert.equal(d({ uaPlatform: 'Linux' }), 'linux');
+  assert.equal(d({ platform: 'MacIntel' }), 'mac');
+  assert.equal(d({ platform: 'Win32' }), 'win');
+  assert.equal(d({ platform: 'Linux x86_64' }), 'linux');
+  assert.equal(d({ ua: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' }), 'mac');
+  assert.equal(d({ ua: 'Mozilla/5.0 (X11; CrOS x86_64)' }), 'linux');
+  assert.equal(d({}), 'linux');
+});
 test('ytdlp page command downloads one video, not the playlist', () => {
   assert.ok(g('ytdlpPageCommand')({ url: 'https://youtube.com/watch?v=1&list=PL', win: false }).includes('--no-playlist'));
 });

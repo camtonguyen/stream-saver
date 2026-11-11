@@ -25,7 +25,7 @@
 
   /* --------------- yt-dlp dialog (sites the browser can't fetch directly) --------------- */
   function ytdlpDialog() {
-    const os = /win/i.test(navigator.platform) ? 'win' : /mac/i.test(navigator.platform) ? 'mac' : 'linux';
+    const os = detectOs({ uaPlatform: navigator.userAgentData && navigator.userAgentData.platform, platform: navigator.platform, ua: navigator.userAgent });
     const cmd = ytdlpPageCommand({ url: location.href, win: os === 'win' });
     const host = document.createElement('div');
     host.style.cssText = 'position:fixed;inset:0;z-index:2147483647';
@@ -34,7 +34,7 @@
     for (const s of ytdlpInstall(os)) {
       const h = document.createElement('div'), c = document.createElement('code');
       h.style.cssText = 'margin-top:8px;font-weight:600';
-      h.textContent = s.name + (s.mine ? ' (your system)' : '') + (s.os === 'mac' ? ' · needs Homebrew, brew.sh' : '');
+      h.textContent = s.name + (s.mine ? ' · detected on this computer' : '') + (s.os === 'mac' ? ' · needs Homebrew, brew.sh' : '');
       c.textContent = s.cmd; c.style.whiteSpace = 'pre-wrap';
       if (!s.mine) c.style.opacity = '.7';
       root.getElementById('i').append(h, c);
