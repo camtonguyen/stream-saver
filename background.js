@@ -147,8 +147,8 @@ chrome.downloads.onChanged.addListener((c) => {
 });
 
 /* ------------------------- on-page button clicked ------------------------- */
-async function overlayDownload(tab, src) {
-  const pick = pickSource(await readTab(tab.id), src);
+async function overlayDownload(tab, src, guess) {
+  const pick = pickSource(await readTab(tab.id), src, guess);
   if (pick.kind !== 'item') return { mode: pick.kind }; // 'mse' | 'drm' | 'none': the page script handles these
   const it = pick.item;
   const { tpl } = await chrome.storage.sync.get({ tpl: '{title}' });
@@ -178,8 +178,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return;
   }
   if (msg.type === MSG.OVERLAY_DL && sender.tab) {
-    overlayDownload(sender.tab, msg.src).then(sendResponse, (e) => sendResponse({ error: e.message }));
+    overlayDownload(sender.tab, msg.src, msg.guess).then(sendResponse, (e) => sendResponse({ error: e.message }));
     return true;
+  }
+  if (msg.type === MSG.YTDLP_DIALOG && sender.tab) { // an iframe player asks the top frame to show the dialog
+    chrome.tabs.sendMessage(sender.tab.id, msg, { frameId: 0 }).catch(() => {});
+    return;
   }
   if (msg.type === MSG.CLEAR && msg.tabId != null) {
     withTab(msg.tabId, (d) => {

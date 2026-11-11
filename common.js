@@ -21,7 +21,8 @@ function expiryOf(u) {
 // "{title} - {site}" → a safe file name (no extension). Tokens: {title} {site} {date}.
 function fileNameFromTemplate(tpl, { title, host, date } = {}) {
   const v = { title, site: host, date: date || new Date().toISOString().slice(0, 10) };
-  return safe((tpl || '{title}').replace(/\{(title|site|date)\}/g, (_, k) => v[k] || ''));
+  const out = (tpl || '{title}').replace(/\{(title|site|date)\}/g, (_, k) => v[k] || '');
+  return safe(out.trim() ? out : title); // a template that renders to nothing falls back to the title
 }
 // Is the overlay switched off for this host (or a parent domain in the list)?
 const siteOff = (list, host) => (list || []).some((d) => host === d || host.endsWith('.' + d));
@@ -36,5 +37,5 @@ function extFor(it) {
 // chrome.runtime message tags (popup / background / bridge / downloader). One place to spell them.
 const MSG = {
   MSE_STATE: 'mse-state', MSE_CMD: 'mse-cmd', PAGE_FETCH: 'page-fetch',
-  DOM_MEDIA: 'dom-media', OVERLAY_DL: 'overlay-dl', CLEAR: 'clear', DIRECT_DOWNLOAD: 'direct-download',
+  DOM_MEDIA: 'dom-media', OVERLAY_DL: 'overlay-dl', YTDLP_DIALOG: 'ytdlp-dialog', CLEAR: 'clear', DIRECT_DOWNLOAD: 'direct-download',
 };

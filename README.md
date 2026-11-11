@@ -13,6 +13,7 @@ Play the video, then click the **⬇ MP4** button that appears on it (top-left o
 | Video type | What happens |
 |---|---|
 | **HLS / DASH** | One click. A downloader tab opens at the highest quality, starts by itself, shows progress, merges video and audio into one MP4 (no re-encoding) and saves it to Downloads. Keep the tab open. |
+| **Live HLS** | Not auto-started: the downloader tab waits for you to press **Start**, then **Stop & save** (it also stops at ~1 GB). |
 | **MP4 / WebM / audio files** | Downloads straight away. |
 | **YouTube**, and other known sites with no fetchable URL (TikTok, Instagram, Facebook, X, Vimeo…) | The button opens a dialog with a yt-dlp command (copied for you) that produces one MP4. **Install the tools first** (the dialog lists steps for macOS, Windows and Linux): macOS `brew install yt-dlp ffmpeg`; Windows `winget install yt-dlp.yt-dlp` and `winget install Gyan.FFmpeg`; Linux `sudo apt install ffmpeg pipx && pipx install yt-dlp` (Debian/Ubuntu) or `sudo pacman -S yt-dlp ffmpeg` (Arch). Without them the command fails. |
 | **Other players with no fetchable URL** | The button says no direct link was found. Nothing is played back or recorded. |

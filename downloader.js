@@ -19,6 +19,7 @@ const REFERER = P.get('referer') || '';
 const TITLE = safe(P.get('title'));
 const AUTO = P.has('auto'); // opened by the on-page button: start by itself, save without a dialog
 const CONCURRENCY = 6;
+const LIVE_CAP = 1e9; // a live recording is held in memory: stop and save at ~1 GB
 let stopFlag = false;
 let MASTER = SRC; // current (freshest) signed URL of the manifest
 
@@ -213,6 +214,15 @@ async function pickFile() {
   }
   return true;
 }
+async function dropPicked() { // the Save dialog already created the file; delete it if we end up saving something else
+  if (pickedHandle) { try { await pickedHandle.remove(); } catch {} pickedHandle = null; }
+}
+// Output for AUTO mode (no dialog, so no user-chosen file): an on-disk OPFS file, so the finished MP4 isn't a second copy in RAM.
+async function opfsOut() {
+  const root = await navigator.storage.getDirectory();
+  for await (const [n] of root.entries()) if (n.startsWith('ss-out-') && Date.now() - +n.slice(7, -4) > 6 * 3600e3) await root.removeEntry(n).catch(() => {});
+  return root.getFileHandle(`ss-out-${Date.now()}.mp4`, { create: true });
+}
 // tracks: [{ chunks, ext, suffix, audio }]. Merges video (+ audio) into one MP4; any failure falls back to the raw files.
 async function finish(tracks) {
   tracks = tracks.filter(Boolean);
@@ -222,14 +232,15 @@ async function finish(tracks) {
       log('Merging into one MP4 (no re-encoding)…');
       $('#bar').removeAttribute('value');
       const { remuxToMp4 } = await import('./remux.mjs');
-      // ponytail: auto mode builds the MP4 in memory (next to the segments) and saves via chrome.downloads; use the dialog (non-auto) or OPFS for multi-GB files.
-      const r = await remuxToMp4({ video: v.chunks, audio: a && a.chunks, writable: pickedHandle ? await pickedHandle.createWritable() : undefined });
-      if (r.blob) return await save([r.blob], TITLE + '.mp4');
+      const out = pickedHandle || (await opfsOut()); // ponytail: segments still sit in RAM until the merge; stream them to OPFS too if that becomes the limit.
+      const r = await remuxToMp4({ video: v.chunks, audio: a && a.chunks, writable: await out.createWritable() });
+      if (out !== pickedHandle) return await save([await out.getFile()], TITLE + '.mp4');
       return log(`✔ Saved ${pickedHandle.name} — ${fmt(r.bytes)}`, 'ok');
     } catch (e) {
       log('Could not make an MP4 (' + e.message + '). Saving the raw files instead.', 'err');
     }
   }
+  await dropPicked();
   for (const t of tracks) await save(t.chunks, `${TITLE}${t.suffix}.${t.ext}`);
 }
 
@@ -368,9 +379,11 @@ async function hlsPrepare() {
 
   if (!pl.variants.length) {
     log(`Media playlist · ${pl.segments.length} segments${pl.end || pl.vod ? '' : ' · LIVE'}`);
-    return async () => {
+    const job = async () => {
       await finish([await hlsTrack({ uri: MASTER, parsed: pl }, '')]);
     };
+    job.live = !pl.end && !pl.vod; // a live stream never finishes by itself, so it is not auto-started
+    return job;
   }
 
   const vs = pl.variants
@@ -518,6 +531,7 @@ async function hlsTrack(t, suffix) {
         lastSeq = fresh[fresh.length - 1].seq;
       }
       if (pl.end) break;
+      if (prog.bytes > LIVE_CAP) { log('Reached ~1 GB: stopping so the recording can be saved.'); break; }
       await sleep(Math.max(1000, pl.target * 500));
       if (stopFlag) break;
       try {
@@ -713,6 +727,7 @@ async function dashTrack(r, sfx) {
         log('Done.', 'ok');
       } catch (e) {
         fail(e);
+        await dropPicked();
       } finally {
         $('#stop').disabled = true;
         prog.live = false;
@@ -727,7 +742,8 @@ async function dashTrack(r, sfx) {
       $('#stop').disabled = true;
       log('Stopping. Saving what has been downloaded…');
     };
-    if (KIND === 'file' || AUTO) start();
+    if (KIND === 'file' || (AUTO && !job.live)) start();
+    else if (AUTO) log('This is a live stream. Press Start to record it, then “Stop & save” when you have enough.');
   } catch (e) {
     fail(e);
   }

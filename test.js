@@ -89,7 +89,8 @@ test('fileNameFromTemplate fills {title} {site} {date}, strips unsafe chars, nev
   assert.equal(f('{title} - {site}', { title: 'My: Clip', host: 'a.dev', date: '2026-01-02' }), 'My Clip - a.dev');
   assert.equal(f('{date}_{title}', { title: 'x', host: '', date: '2026-01-02' }), '2026-01-02_x');
   assert.equal(f('', { title: 'T' }), 'T');
-  assert.equal(f('{site}', { title: 'T', host: '' }), 'video');
+  assert.equal(f('{site}', { title: 'T', host: '' }), 'T'); // template gave nothing: use the title, not 'video' for every file
+  assert.equal(f('{site}', { title: '', host: '' }), 'video');
 });
 test('siteOff matches the host and its subdomains only', () => {
   const s = g('siteOff');
@@ -108,6 +109,8 @@ test('pickSource: exact src match wins, else newest HLS/DASH, else MSE, DRM or n
   const d = { items: { 'https://h/a.mp4': { url: 'https://h/a.mp4', kind: 'mp4', t: 1 }, 'https://h/m.m3u8': { url: 'https://h/m.m3u8', kind: 'hls', t: 2 }, 'https://h/old.m3u8': { url: 'https://h/old.m3u8', kind: 'hls', t: 1 }, 'https://h/s.mp3': { url: 'https://h/s.mp3', kind: 'audio', t: 9 } }, mse: {} };
   assert.equal(p(d, 'https://h/a.mp4').item.url, 'https://h/a.mp4');
   assert.equal(p(d, 'blob:https://h/xyz').item.url, 'https://h/m.m3u8');
+  assert.equal(p(d, 'blob:https://h/xyz', false).kind, 'none'); // several videos / yt-dlp sites: never guess
+  assert.equal(p(d, 'https://h/a.mp4', false).item.url, 'https://h/a.mp4'); // exact match is always fine
   assert.equal(p({ items: {}, mse: { 0: { tracks: [{ bytes: 5 }] } } }, 'blob:x').kind, 'mse');
   assert.equal(p({ items: {}, mse: { 0: { eme: true, tracks: [] } } }, '').kind, 'drm');
   assert.equal(p({ items: { 'https://h/s.mp3': { kind: 'audio', t: 1 } }, mse: {} }, '').kind, 'none');
@@ -131,7 +134,7 @@ test('ytdlpInstall lists macOS, Windows and Linux steps, the current OS first', 
   assert.ok(cmd('win').includes('winget install yt-dlp.yt-dlp') && cmd('win').includes('Gyan.FFmpeg'));
   assert.ok(cmd('linux').includes('apt') && cmd('linux').includes('pacman') && cmd('linux').includes('yt-dlp'));
 });
-test('detectOs reads userAgentData first, then platform, then the user agent', () => {
+test('detectOs: mac/win/linux, and "other" for ChromeOS, Android, iOS or unknown', () => {
   const d = g('detectOs');
   assert.equal(d({ uaPlatform: 'macOS' }), 'mac');
   assert.equal(d({ uaPlatform: 'Windows' }), 'win');
@@ -140,8 +143,21 @@ test('detectOs reads userAgentData first, then platform, then the user agent', (
   assert.equal(d({ platform: 'Win32' }), 'win');
   assert.equal(d({ platform: 'Linux x86_64' }), 'linux');
   assert.equal(d({ ua: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' }), 'mac');
-  assert.equal(d({ ua: 'Mozilla/5.0 (X11; CrOS x86_64)' }), 'linux');
-  assert.equal(d({}), 'linux');
+  assert.equal(d({ uaPlatform: 'Chrome OS', platform: 'Linux x86_64', ua: 'Mozilla/5.0 (X11; CrOS x86_64)' }), 'other');
+  assert.equal(d({ platform: 'Linux armv8l', ua: 'Mozilla/5.0 (Linux; Android 14)' }), 'other');
+  assert.equal(d({ platform: 'iPad', ua: 'Mozilla/5.0 (iPad; CPU OS 17 like Mac OS X)' }), 'other');
+  assert.equal(d({}), 'other');
+});
+test('ytdlpInstall for an unknown system marks none as detected', () => {
+  const h = g('ytdlpInstall')('other');
+  assert.deepEqual(h.map((x) => x.os), ['mac', 'win', 'linux']);
+  assert.ok(h.every((x) => !x.mine));
+});
+test('ytdlpPageUrl turns a YouTube embed into the watch page', () => {
+  const u = g('ytdlpPageUrl');
+  assert.equal(u('https://www.youtube.com/embed/abc123?autoplay=1'), 'https://www.youtube.com/watch?v=abc123');
+  assert.equal(u('https://www.youtube.com/watch?v=1'), 'https://www.youtube.com/watch?v=1');
+  assert.equal(u('https://vimeo.com/1'), 'https://vimeo.com/1');
 });
 test('ytdlp page command downloads one video, not the playlist', () => {
   assert.ok(g('ytdlpPageCommand')({ url: 'https://youtube.com/watch?v=1&list=PL', win: false }).includes('--no-playlist'));

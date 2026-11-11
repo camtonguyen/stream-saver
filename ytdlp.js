@@ -41,7 +41,7 @@ function shareDirectUrl(href) {
 // Sites where the browser can't fetch the video itself. 'only' = never (YouTube serves SABR streams), 'fallback' = when no direct link was found.
 const YTDLP_SITES = /^https?:\/\/([^/]*\.)?(youtube\.com|youtu\.be|facebook\.com|fb\.watch|tiktok\.com|x\.com|twitter\.com|instagram\.com|xiaohongshu\.com|xhslink\.com|vimeo\.com|twitch\.tv|reddit\.com|bilibili\.com|dailymotion\.com|soundcloud\.com|pinterest\.com)(\/|$)/;
 const ytdlpRoute = (url) => (/^https?:\/\/([^/]*\.)?(youtube\.com|youtu\.be)(\/|$)/.test(url) ? 'only' : YTDLP_SITES.test(url) ? 'fallback' : null);
-// Install steps for all three systems, the user's own first. os: 'mac' | 'win' | 'linux'.
+// Install steps for all three systems, the user's own first. os: 'mac' | 'win' | 'linux' | 'other' (none marked).
 function ytdlpInstall(os) {
   const all = [
     { os: 'mac', name: 'macOS', cmd: 'brew install yt-dlp ffmpeg' }, // needs Homebrew (brew.sh)
@@ -51,8 +51,14 @@ function ytdlpInstall(os) {
   return [...all.filter((x) => x.mine), ...all.filter((x) => !x.mine)];
 }
 
-// 'mac' | 'win' | 'linux' from whatever the browser exposes (userAgentData.platform is the most reliable).
+// 'mac' | 'win' | 'linux' | 'other' (ChromeOS, Android, iOS, unknown: yt-dlp can't be installed the usual way there).
 function detectOs({ uaPlatform, platform, ua } = {}) {
-  const s = [uaPlatform, platform, ua].find(Boolean) || '';
-  return /^win/i.test(s) || /windows/i.test(s) ? 'win' : /mac/i.test(s) ? 'mac' : 'linux';
+  const s = [uaPlatform, platform, ua].filter(Boolean).join(' ');
+  return /cros|chrome os|android|iphone|ipad|ipod/i.test(s) ? 'other' : /windows|\bwin(32|64)?\b/i.test(s) ? 'win' : /mac/i.test(s) ? 'mac' : /linux|x11/i.test(s) ? 'linux' : 'other';
+}
+
+// youtube.com/embed/ID → the watch page (embeds can be restricted); anything else unchanged.
+function ytdlpPageUrl(url) {
+  const m = /^https?:\/\/([^/]*\.)?youtube\.com\/embed\/([\w-]+)/.exec(url);
+  return m ? 'https://www.youtube.com/watch?v=' + m[2] : url;
 }
