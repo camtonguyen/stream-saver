@@ -14,7 +14,7 @@ Play the video, then click the **⬇ MP4** button that appears on it (top-left o
 |---|---|
 | **HLS / DASH** | A downloader tab opens at the highest quality. Click **Choose location & download MP4**, pick where to save, and keep the tab open. Video and audio are merged into one MP4, without re-encoding. |
 | **MP4 / WebM / audio files** | Downloads straight away. |
-| **MSE / blob players** (no URL to fetch) | The button switches to *Capturing…* and plays the video at 16× muted. Click it again (or let the video end) to save. Video and audio come as separate files. |
+| **MSE / blob players** (no URL to fetch) | The button switches to *Capturing…* and plays the video at 16× muted. Click it again (or let the video end) to save. Video and audio are merged into one MP4 (raw separate files if the merge fails). |
 | **DRM-protected** | The button is disabled (🔒). |
 
 Click the extension icon for settings: the **file name template** (`{title}`, `{site}`, `{date}`) and a **per-site switch** that hides the button on the current site.

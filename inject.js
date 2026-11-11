@@ -136,6 +136,10 @@
     } else if (m.__mdlCmd === 'save-blob') {
       const b = S.blobs[m.id];
       if (b && !S.eme) saveBlob(b.blob, `${base}.${extFor(b.blob.type)}`);
+    } else if (m.__mdlCmd === 'export') {
+      // Hand the captured buffers to the content script (overlay.js), which merges them into one MP4.
+      const tracks = S.eme ? [] : S.tracks.filter((t) => t.chunks.length).map((t) => ({ id: t.id, mime: t.mime, blob: new Blob(t.chunks, { type: t.mime.split(';')[0] }) }));
+      window.postMessage({ __mdlOut: 'export', tracks }, '*');
     } else if (m.__mdlCmd === 'turbo') {
       for (const v of document.querySelectorAll('video, audio')) {
         v.muted = true;

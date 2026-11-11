@@ -53,13 +53,39 @@
     }
   }
 
-  function saveMse(v, it) {
-    const name = fileNameFromTemplate(cfg.tpl, { title: document.title, host: topHost() });
+  const rawSave = (name) => { // fallback: the player's buffers as-is (separate video/audio files)
     for (const t of mse.tracks || []) if (t.bytes > 0) window.postMessage({ __mdlCmd: 'save-track', id: t.id, name }, '*');
     for (const b of mse.blobs || []) window.postMessage({ __mdlCmd: 'save-blob', id: b.id, name }, '*');
-    v.playbackRate = 1; v.muted = false;
-    it.capturing = false;
-    say(it, '✓ Saved (video and audio are separate files)', 5000);
+  };
+  const exported = () => new Promise((res, rej) => { // ask inject.js (page world) for the captured buffers
+    const t = setTimeout(() => rej(new Error('no capture data')), 5000);
+    const on = (e) => {
+      if (e.source !== window || !e.data || e.data.__mdlOut !== 'export') return;
+      clearTimeout(t); removeEventListener('message', on); res(e.data.tracks);
+    };
+    addEventListener('message', on);
+    window.postMessage({ __mdlCmd: 'export' }, '*');
+  });
+
+  async function saveMse(v, it) {
+    it.capturing = false; v.playbackRate = 1; v.muted = false;
+    const name = fileNameFromTemplate(cfg.tpl, { title: document.title, host: topHost() });
+    say(it, 'Merging into MP4…', 120000);
+    try {
+      const tracks = await exported();
+      const vt = tracks.find((t) => /^video/i.test(t.mime)), at = tracks.find((t) => /^audio/i.test(t.mime));
+      if (!vt && !at) throw new Error('nothing captured');
+      const { remuxToMp4 } = await import(chrome.runtime.getURL('remux.mjs'));
+      const { blob } = await remuxToMp4({ video: (vt || at).blob, audio: vt && at ? at.blob : undefined });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = name + '.mp4';
+      document.documentElement.append(a); a.click(); a.remove();
+      say(it, '✓ Saved ' + name + '.mp4', 5000);
+    } catch (e) {
+      console.warn('[Stream Saver] MP4 merge failed, saving raw buffers:', e);
+      rawSave(name);
+      say(it, '✓ Saved raw files (MP4 merge failed)', 5000);
+    }
   }
 
   function tick() {

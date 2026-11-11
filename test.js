@@ -141,6 +141,17 @@ test('remux: separate video and audio files merge into one MP4 with both tracks'
   assert.deepEqual(s.map((x) => x.codec_type).sort(), ['audio', 'video']);
   assert.deepEqual(s.map((x) => x.codec_name).sort(), ['aac', 'h264']);
 });
+test('remux: separate VP9 and Opus WebM tracks (MSE capture) become one MP4, returned as a blob when no writable is given', async () => {
+  const v = path.join(tmp, 'v.webm'), a = path.join(tmp, 'a.webm'), out = path.join(tmp, 'webm2mp4.mp4');
+  ff('-f', 'lavfi', '-i', 'testsrc=size=320x240:rate=30', '-t', '3', '-c:v', 'libvpx-vp9', '-an', v);
+  ff('-f', 'lavfi', '-i', 'sine=frequency=440', '-t', '3', '-c:a', 'libopus', a);
+  const { remuxToMp4 } = await import('./remux.mjs');
+  const r = await remuxToMp4({ video: blob(v), audio: blob(a) });
+  assert.ok(r.blob.size > 0 && r.blob.size === r.bytes);
+  fs.writeFileSync(out, Buffer.from(await r.blob.arrayBuffer()));
+  const s = JSON.parse(probe(out)).streams;
+  assert.deepEqual(s.map((x) => x.codec_name).sort(), ['opus', 'vp9']);
+});
 test('remux: non-media input rejects instead of writing a broken file', async () => {
   const { remuxToMp4 } = await import('./remux.mjs');
   await assert.rejects(remuxToMp4({ video: [new Blob(['not a video'])], writable: sink(path.join(tmp, 'bad.mp4')) }));
