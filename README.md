@@ -14,7 +14,7 @@ Play the video, then click the **⬇ MP4** button that appears on it (top-left o
 |---|---|
 | **HLS / DASH** | One click. A downloader tab opens at the highest quality, starts by itself, shows progress, merges video and audio into one MP4 (no re-encoding) and saves it to Downloads. Keep the tab open. |
 | **MP4 / WebM / audio files** | Downloads straight away. |
-| **MSE / blob players** (no URL to fetch) | One click. A full-page loading screen shows while the video is played from the start at 16× (muted) and captured; then it is merged into one MP4 and saved. Cancel any time. Live videos aren't supported. |
+| **Players with no fetchable URL** (MSE / blob) | The button says no direct link was found. Nothing is played back or recorded. |
 | **DRM-protected** | The button is disabled (🔒). |
 
 Click the extension icon for settings: the **file name template** (`{title}`, `{site}`, `{date}`) and a **per-site switch** that hides the button on the current site.

@@ -12,7 +12,6 @@
     "declarativeNetRequestWithHostAccess"
   ],
   "host_permissions": ["<all_urls>"],
-  "web_accessible_resources": [{ "resources": ["remux.mjs", "vendor/mediabunny.min.mjs"], "matches": ["<all_urls>"] }],
   "background": { "service_worker": "background.js" },
   "action": { "default_popup": "popup.html", "default_title": "Stream Saver" },
   "content_scripts": [
