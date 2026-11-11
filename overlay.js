@@ -83,6 +83,18 @@
   }
 
   /* ------------------------------ keep buttons placed ------------------------------ */
+  // The video's rect minus whatever scrolling/overflow-hidden ancestors cut off, so a card in a list
+  // that is half scrolled out keeps its button on the visible part of that very video.
+  function clipped(v) {
+    let { left, top, right, bottom, width, height } = v.getBoundingClientRect();
+    for (let p = v.parentElement; p && p !== document.documentElement; p = p.parentElement) {
+      if (getComputedStyle(p).overflow === 'visible') continue;
+      const c = p.getBoundingClientRect();
+      left = Math.max(left, c.left); top = Math.max(top, c.top); right = Math.min(right, c.right); bottom = Math.min(bottom, c.bottom);
+    }
+    // full size is kept for the MIN check so a clipped-but-big video still counts; position uses the clipped box
+    return { left, top, right, bottom, width: Math.min(width, right - left), height: Math.min(height, bottom - top) };
+  }
   function tick() {
     const off = siteOff(cfg.off, topHost());
     const live = new Set(off ? [] : document.querySelectorAll('video'));
@@ -91,7 +103,7 @@
     for (const v of live) {
       let it = items.get(v);
       if (!it) items.set(v, (it = make(v)));
-      const r = v.getBoundingClientRect();
+      const r = clipped(v);
       const show = r.width >= MIN_W && r.height >= MIN_H && r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth && getComputedStyle(v).visibility !== 'hidden';
       it.host.style.display = show ? '' : 'none';
       if (!show) continue;
@@ -107,6 +119,10 @@
     }
   }
   // ponytail: polling (cheap when a page has no video). Swap for Mutation/IntersectionObserver if idle CPU ever shows up.
+  let raf = 0; // scrolling/resizing moves videos between polls: re-place the buttons on the next frame
+  const soon = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; if (items.size) tick(); }); };
+  addEventListener('scroll', soon, { capture: true, passive: true });
+  addEventListener('resize', soon, { passive: true });
   const loop = () => { if (!document.hidden) tick(); setTimeout(loop, items.size ? 400 : 1500); };
   loop();
 })();
