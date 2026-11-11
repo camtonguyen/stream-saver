@@ -14,7 +14,7 @@ Play the video, then click the **⬇ MP4** button that appears on it (top-left o
 |---|---|
 | **HLS / DASH** | One click. A downloader tab opens at the highest quality, starts by itself, shows progress, merges video and audio into one MP4 (no re-encoding) and saves it to Downloads. Keep the tab open. |
 | **MP4 / WebM / audio files** | Downloads straight away. |
-| **YouTube**, and other known sites with no fetchable URL (TikTok, Instagram, Facebook, X, Vimeo…) | The button opens a dialog with a yt-dlp command (copied for you) that produces one MP4. **Install the tools first:** `brew install yt-dlp ffmpeg` (macOS), `winget install yt-dlp ffmpeg` (Windows). Without them the command fails. |
+| **YouTube**, and other known sites with no fetchable URL (TikTok, Instagram, Facebook, X, Vimeo…) | The button opens a dialog with a yt-dlp command (copied for you) that produces one MP4. **Install the tools first** (the dialog lists steps for macOS, Windows and Linux): macOS `brew install yt-dlp ffmpeg`; Windows `winget install yt-dlp.yt-dlp` and `winget install Gyan.FFmpeg`; Linux `sudo apt install ffmpeg pipx && pipx install yt-dlp` (Debian/Ubuntu) or `sudo pacman -S yt-dlp ffmpeg` (Arch). Without them the command fails. |
 | **Other players with no fetchable URL** | The button says no direct link was found. Nothing is played back or recorded. |
 | **DRM-protected** | The button is disabled (🔒). |
 

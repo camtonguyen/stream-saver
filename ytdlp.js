@@ -41,5 +41,12 @@ function shareDirectUrl(href) {
 // Sites where the browser can't fetch the video itself. 'only' = never (YouTube serves SABR streams), 'fallback' = when no direct link was found.
 const YTDLP_SITES = /^https?:\/\/([^/]*\.)?(youtube\.com|youtu\.be|facebook\.com|fb\.watch|tiktok\.com|x\.com|twitter\.com|instagram\.com|xiaohongshu\.com|xhslink\.com|vimeo\.com|twitch\.tv|reddit\.com|bilibili\.com|dailymotion\.com|soundcloud\.com|pinterest\.com)(\/|$)/;
 const ytdlpRoute = (url) => (/^https?:\/\/([^/]*\.)?(youtube\.com|youtu\.be)(\/|$)/.test(url) ? 'only' : YTDLP_SITES.test(url) ? 'fallback' : null);
-const ytdlpInstallHint = (os) =>
-  os === 'mac' ? 'brew install yt-dlp ffmpeg' : os === 'win' ? 'winget install yt-dlp ffmpeg' : 'pip install -U yt-dlp   and install ffmpeg with your package manager (e.g. sudo apt install ffmpeg)';
+// Install steps for all three systems, the user's own first. os: 'mac' | 'win' | 'linux'.
+function ytdlpInstall(os) {
+  const all = [
+    { os: 'mac', name: 'macOS', cmd: 'brew install yt-dlp ffmpeg' }, // needs Homebrew (brew.sh)
+    { os: 'win', name: 'Windows', cmd: 'winget install yt-dlp.yt-dlp\nwinget install Gyan.FFmpeg' },
+    { os: 'linux', name: 'Linux', cmd: '# Debian / Ubuntu\nsudo apt install ffmpeg pipx && pipx install yt-dlp\n# Arch\nsudo pacman -S yt-dlp ffmpeg\n# other: install yt-dlp and ffmpeg with your package manager' },
+  ].map((x) => ({ ...x, mine: x.os === os }));
+  return [...all.filter((x) => x.mine), ...all.filter((x) => !x.mine)];
+}

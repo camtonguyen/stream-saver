@@ -121,11 +121,15 @@ test('ytdlpRoute: YouTube always needs yt-dlp, other known sites only as a fallb
   assert.equal(r('https://example.com/watch'), null);
   assert.equal(r('https://notyoutube.com/x'), null);
 });
-test('ytdlpInstallHint gives the right install command per OS', () => {
-  const h = g('ytdlpInstallHint');
-  assert.equal(h('mac'), 'brew install yt-dlp ffmpeg');
-  assert.equal(h('win'), 'winget install yt-dlp ffmpeg');
-  assert.ok(h('linux').includes('yt-dlp') && h('linux').includes('ffmpeg'));
+test('ytdlpInstall lists macOS, Windows and Linux steps, the current OS first', () => {
+  const h = g('ytdlpInstall');
+  assert.deepEqual(h('win').map((x) => x.os), ['win', 'mac', 'linux']);
+  assert.deepEqual(h('linux').map((x) => x.os), ['linux', 'mac', 'win']);
+  assert.ok(h('win')[0].mine && !h('win')[1].mine);
+  const all = h('mac'); const cmd = (os) => all.find((x) => x.os === os).cmd;
+  assert.ok(cmd('mac').includes('brew install yt-dlp ffmpeg'));
+  assert.ok(cmd('win').includes('winget install yt-dlp.yt-dlp') && cmd('win').includes('Gyan.FFmpeg'));
+  assert.ok(cmd('linux').includes('apt') && cmd('linux').includes('pacman') && cmd('linux').includes('yt-dlp'));
 });
 test('ytdlp page command downloads one video, not the playlist', () => {
   assert.ok(g('ytdlpPageCommand')({ url: 'https://youtube.com/watch?v=1&list=PL', win: false }).includes('--no-playlist'));
