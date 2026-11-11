@@ -17,6 +17,7 @@ const SRC_TAB = P.has('tab') ? +P.get('tab') : null;
 let SRC_FRAME = +(P.get('frame') || 0);
 const REFERER = P.get('referer') || '';
 const TITLE = safe(P.get('title'));
+const AUTO = P.has('auto'); // opened by the on-page button: start by itself, save without a dialog
 const CONCURRENCY = 6;
 let stopFlag = false;
 let MASTER = SRC; // current (freshest) signed URL of the manifest
@@ -203,7 +204,7 @@ async function save(chunks, filename) {
 let pickedHandle = null; // chosen in the Save dialog at the Start click (needs a user gesture)
 const AUDIO_ONLY = /^(aac|mp3|m4a|ogg)$/;
 async function pickFile() {
-  if (KIND === 'file' || !window.showSaveFilePicker) return true;
+  if (KIND === 'file' || AUTO || !window.showSaveFilePicker) return true;
   try {
     pickedHandle = await showSaveFilePicker({ suggestedName: TITLE + '.mp4', types: [{ description: 'MP4 video', accept: { 'video/mp4': ['.mp4'] } }] });
   } catch (e) {
@@ -216,11 +217,14 @@ async function pickFile() {
 async function finish(tracks) {
   tracks = tracks.filter(Boolean);
   const v = tracks.find((t) => !t.audio), a = tracks.find((t) => t.audio);
-  if (v && !AUDIO_ONLY.test(v.ext) && pickedHandle) {
+  if (v && !AUDIO_ONLY.test(v.ext) && (pickedHandle || AUTO)) {
     try {
       log('Merging into one MP4 (no re-encoding)…');
+      $('#bar').removeAttribute('value');
       const { remuxToMp4 } = await import('./remux.mjs');
-      const r = await remuxToMp4({ video: v.chunks, audio: a && a.chunks, writable: await pickedHandle.createWritable() });
+      // ponytail: auto mode builds the MP4 in memory (next to the segments) and saves via chrome.downloads; use the dialog (non-auto) or OPFS for multi-GB files.
+      const r = await remuxToMp4({ video: v.chunks, audio: a && a.chunks, writable: pickedHandle ? await pickedHandle.createWritable() : undefined });
+      if (r.blob) return await save([r.blob], TITLE + '.mp4');
       return log(`✔ Saved ${pickedHandle.name} — ${fmt(r.bytes)}`, 'ok');
     } catch (e) {
       log('Could not make an MP4 (' + e.message + '). Saving the raw files instead.', 'err');
@@ -723,7 +727,7 @@ async function dashTrack(r, sfx) {
       $('#stop').disabled = true;
       log('Stopping. Saving what has been downloaded…');
     };
-    if (KIND === 'file') start();
+    if (KIND === 'file' || AUTO) start();
   } catch (e) {
     fail(e);
   }

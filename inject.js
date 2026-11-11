@@ -43,6 +43,7 @@
       const sb = orig.apply(this, arguments);
       const t = { id: S.tracks.length, mime: String(mime), chunks: [], bytes: 0 };
       S.tracks.push(t);
+      t.sb = sb;
       sbMap.set(sb, t);
       post();
       return sb;
@@ -140,6 +141,22 @@
       // Hand the captured buffers to the content script (overlay.js), which merges them into one MP4.
       const tracks = S.eme ? [] : S.tracks.filter((t) => t.chunks.length).map((t) => ({ id: t.id, mime: t.mime, blob: new Blob(t.chunks, { type: t.mime.split(';')[0] }) }));
       window.postMessage({ __mdlOut: 'export', tracks }, '*');
+    } else if (m.__mdlCmd === 'restart') {
+      // Capture the WHOLE video: keep init segments, drop captured media AND the player's buffered ranges so
+      // every segment is fetched again in order, then rewind and play at 16x.
+      for (const t of S.tracks) {
+        const init = [...t.chunks].reverse().find(isInit);
+        t.chunks = init ? [init] : [];
+        t.bytes = init ? init.byteLength : 0;
+        try { if (t.sb && !t.sb.updating) t.sb.remove(0, Infinity); } catch (e) {}
+      }
+      post();
+      for (const v of document.querySelectorAll('video, audio')) {
+        v.currentTime = 0;
+        v.muted = true;
+        v.playbackRate = 16;
+        v.play().catch(() => {});
+      }
     } else if (m.__mdlCmd === 'turbo') {
       for (const v of document.querySelectorAll('video, audio')) {
         v.muted = true;

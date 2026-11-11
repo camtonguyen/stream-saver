@@ -12,16 +12,16 @@ Play the video, then click the **⬇ MP4** button that appears on it (top-left o
 
 | Video type | What happens |
 |---|---|
-| **HLS / DASH** | A downloader tab opens at the highest quality. Click **Choose location & download MP4**, pick where to save, and keep the tab open. Video and audio are merged into one MP4, without re-encoding. |
+| **HLS / DASH** | One click. A downloader tab opens at the highest quality, starts by itself, shows progress, merges video and audio into one MP4 (no re-encoding) and saves it to Downloads. Keep the tab open. |
 | **MP4 / WebM / audio files** | Downloads straight away. |
-| **MSE / blob players** (no URL to fetch) | The button switches to *Capturing…* and plays the video at 16× muted. Click it again (or let the video end) to save. Video and audio are merged into one MP4 (raw separate files if the merge fails). |
+| **MSE / blob players** (no URL to fetch) | One click. A full-page loading screen shows while the video is played from the start at 16× (muted) and captured; then it is merged into one MP4 and saved. Cancel any time. Live videos aren't supported. |
 | **DRM-protected** | The button is disabled (🔒). |
 
 Click the extension icon for settings: the **file name template** (`{title}`, `{site}`, `{date}`) and a **per-site switch** that hides the button on the current site.
 
 ## Good to know
 - If the MP4 merge fails, the raw `.ts` / `.mp4` / `.m4a` files are saved instead. Merge them with `ffmpeg -i video.mp4 -i audio.m4a -c copy out.mp4`.
-- Downloaded segments are held in memory until the merge, so very long videos need free RAM; the MP4 itself is streamed to disk.
+- Segments and the finished MP4 are held in memory before saving, so very long videos (multi-GB) need free RAM.
 - YouTube and similar sites that serve only MSE can't be fetched by URL; they use the capture path above. The yt-dlp helpers (`ytdlp.js`) are not wired into the UI right now.
 
 ## Fixing 403 Forbidden

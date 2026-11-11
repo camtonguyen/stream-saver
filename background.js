@@ -154,7 +154,7 @@ async function overlayDownload(tab, src) {
   const { tpl } = await chrome.storage.sync.get({ tpl: '{title}' });
   const title = fileNameFromTemplate(tpl, { title: (tab.title || '').replace(/ - Google Drive$/, ''), host: new URL(tab.url).hostname });
   if (it.kind === 'hls' || it.kind === 'dash') {
-    const q = new URLSearchParams({ url: it.url, kind: it.kind, tab: tab.id, frame: it.frameId || 0, referer: (it.hdr && it.hdr.referer) || tab.url || '', title });
+    const q = new URLSearchParams({ url: it.url, kind: it.kind, tab: tab.id, frame: it.frameId || 0, referer: (it.hdr && it.hdr.referer) || tab.url || '', title, auto: 1 });
     await chrome.tabs.create({ url: chrome.runtime.getURL('downloader.html?' + q) });
     return { mode: 'tab' };
   }
